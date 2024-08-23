@@ -1,14 +1,28 @@
-# Project
+# Azure IoT Operation SDKs
 
-> This repo has been populated by an initial template to help get you started. Please
-> make sure to update the content to build a great experience for community-building.
+This repository is for active development of the Azure IoT Operations SDKs. Visit Microsoft Learn for more information and [developing edge applications](https://learn.microsoft.com/en-us/azure/iot-operations/create-edge-apps/edge-apps-overview) or other components of [Azure IoT Operations](https://learn.microsoft.com/en-us/azure/iot-operations/).
 
-As the maintainer of this project, please make a few updates:
+There are three SDKs available, one for each language; .NET, Go and Rust.
 
-- Improving this README.MD file to provide a great experience
-- Updating SUPPORT.MD with content about this project's support experience
-- Understanding the security reporting process in SECURITY.MD
-- Remove this section from the README
+## SDK components
+
+This repository contains the following components:
+
+| Component | Description | [Go](./go) | [.NET](./dotnet) | [Rust](./rust) |
+|-|-|-|-|-|
+| Session client | Creates the underlying MQTT client, authenticates against MQTT Broker and maintains the connection. | :green_circle: | :green_circle: | :green_circle: |
+| State store client | Client that enables interaction with the state store. | :green_circle: | :yellow_circle: | :yellow_circle: |
+| Lease lock client | Create a lock for a shared resource | :green_circle: | :yellow_circle: | :yellow_circle: |
+| Leader election client | | :green_circle: | :yellow_circle: | :yellow_circle: |
+| Schema registry client | | :green_circle: | :yellow_circle: | :yellow_circle: |
+| Protocol compiler | | :green_circle: | :yellow_circle: | :yellow_circle: |
+||||||
+
+## Getting started
+
+## Packages available
+
+## Samples
 
 ## Contributing
 
