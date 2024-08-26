@@ -1,0 +1,73 @@
+{
+    "name": "Nightly MQTT Broker",
+    "build": {
+        "dockerfile": "../Dockerfile"
+    },
+    "hostRequirements": {
+        "cpus": 8,
+        "memory": "32gb",
+        "storage": "64gb"
+    },
+    "features": {
+        "ghcr.io/devcontainers/features/azure-cli:1": {
+            "extensions": "connectedk8s,k8s-extension,azure-iot-ops"
+        }
+    },
+    "customizations": {
+        "codespaces": {
+            "repositories": {
+                "Azure-Samples/explore-iot-operations": {
+                    "permissions": "write-all"
+                },
+                "Azure-Samples/MqttApplicationSamples": {
+                    "permissions": "write-all"
+                }
+            }
+        },
+        "vscode": {
+            "extensions": [
+                "vsciot-vscode.vscode-dtdl",
+                "ms-azuretools.vscode-docker",
+                "ms-kubernetes-tools.vscode-kubernetes-tools",
+                "ms-dotnettools.csharp",
+                "davidanson.vscode-markdownlint",
+                "mutantdino.resourcemonitor"
+            ]
+        },
+        "settings": {
+            "scm.repositories.visible": true,
+            "scm.alwaysShowRepositories": true,
+            "scm.defaultViewMode": "tree",
+            "files.trimTrailingWhitespace": true,
+            "files.trimFinalNewlines": true,
+            "files.insertFinalNewline": true,
+            "telemetry.telemetryLevel": "off",
+            "redhat.telemetry.enabled": false
+        }
+    },
+    "containerEnv": {
+        "CLUSTER_NAME": "${localEnv:CODESPACE_NAME}",
+        "DOTNET_CLI_TELEMETRY_OPTOUT": "true"
+    },
+    "forwardPorts": [
+        1883,
+        8883
+    ],
+    "secrets": {
+        "SUBSCRIPTION_ID": {
+            "description": "Your Azure subscription ID"
+        },
+        "RESOURCE_GROUP": {
+            "description": "Your Azure resource group"
+        },
+        "LOCATION": {
+            "description": "Region to use, must be one of eastus, eastus2, westus, westus2, westeurope, or northeurope.",
+            "documentationUrl": "https://learn.microsoft.com/azure/iot-operations/deploy-iot-ops/howto-prepare-cluster"
+        }
+    },
+
+    "waitFor": "postCreateCommand",
+    "onCreateCommand": ".devcontainer/initialize-cluster.sh",
+    "postCreateCommand": "git pull; .devcontainer/deploy-aio.sh nightly",
+    "postStartCommand": "sudo sh -c 'echo 127.0.0.1 aio-mq-dmqtt-frontend >> /etc/hosts'"
+}
