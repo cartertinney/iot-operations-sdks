@@ -4,19 +4,32 @@ This repository is for active development of the Azure IoT Operations SDKs. Visi
 
 There are three SDKs available, one for each language; .NET, Go and Rust.
 
-## SDK components
+## Components
 
-This repository contains the following components:
+### Language libraries
+
+The repository contains the following libraries with the associated language support:
+
+:green_circle: Supported  
+:yellow_circle: In progress  
+:orange_circle: Planned  
+:red_circle: No plans  
 
 | Component | Description | [Go](./go) | [.NET](./dotnet) | [Rust](./rust) |
 |-|-|-|-|-|
-| Session client | Creates the underlying MQTT client, authenticates against MQTT Broker and maintains the connection. | :green_circle: | :green_circle: | :green_circle: |
-| State store client | Client that enables interaction with the state store. | :green_circle: | :yellow_circle: | :yellow_circle: |
-| Lease lock client | Create a lock for a shared resource | :green_circle: | :yellow_circle: | :yellow_circle: |
-| Leader election client | | :green_circle: | :yellow_circle: | :yellow_circle: |
-| Schema registry client | | :green_circle: | :yellow_circle: | :yellow_circle: |
-| Protocol compiler | | :green_circle: | :yellow_circle: | :yellow_circle: |
-||||||
+| **Session client** | Creates the underlying MQTT client, authenticates against MQTT Broker and maintains the connection. | :green_circle: | :green_circle: | :green_circle: |
+| **State store client** | Client that enables interaction with the state store and provides the ability to get/set/delete and watch a key | :green_circle: | :yellow_circle: | :yellow_circle: |
+| **Lease lock client** | Create a lock for a shared resource | :green_circle: | :yellow_circle: | :yellow_circle: |
+| **Leader election client** | Assigns the elected application (leader) when multiple applications a deployed in a highly available configuration | :green_circle: | :yellow_circle: | :yellow_circle: |
+| **Schema registry client** | Interact with the schema registry | :green_circle: | :yellow_circle: | :yellow_circle: |
+| **Protocol compiler support** | Which languages are supported as outputs from the protocol compiler | :green_circle: | :yellow_circle: | :yellow_circle: |
+
+### Potocol compiler
+
+| Tool | Description |
+|-|-|
+| **Protocol compiler** | The Protocol Compiler generates client libraries and server stubs from a DTDL definition |
+| **State store CLI** | The state store CLI allows you to interact with the state store independent of the client library |
 
 ## Getting started
 
