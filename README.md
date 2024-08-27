@@ -2,8 +2,6 @@
 
 This repository is for active development of the Azure IoT Operations SDKs. Visit Microsoft Learn for more information and [developing edge applications](https://learn.microsoft.com/en-us/azure/iot-operations/create-edge-apps/edge-apps-overview) or other components of [Azure IoT Operations](https://learn.microsoft.com/en-us/azure/iot-operations/).
 
-There are three SDKs available, one for each language; .NET, Go and Rust.
-
 ## Components
 
 ### Language libraries
@@ -33,9 +31,33 @@ The repository contains the following libraries with the associated language sup
 
 ## Getting started
 
+1. Open the repository using GitHub Codespaces:
+
+   [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/Azure/iot-operations-sdks)
+
+1. Provide the following recommended secrets. These will be set as environment variables to assist installation:
+
+    |Name|Value|
+    |-|-|
+    |**SUBSCRIPTION_ID**|Your Azure subscription ID.|
+    |**RESOURCE_GROUP**|A name for a new Azure resource group where your cluster will be created|
+    |**LOCATION**|An Azure region close to you. The following regions are supported in public preview: `eastus`, `eastus2`, `westus`, `westus2`, `westeurope`, or `northeurope`|
+
+2. Continue following [Azure IoT Operations docs](https://learn.microsoft.com/azure/iot-operations/get-started/quickstart-deploy) to complete the deployment of IoT Operations.
+
+3. Configure IoT Operations for running the quickstart:
+
+   ```bash
+   .devcontainer/deploy-aio.sh release
+   ```
+
 ## Packages available
 
 ## Samples
+
+* Link to .NET
+* Link to Go
+* Link to Rust
 
 ## Contributing
 
