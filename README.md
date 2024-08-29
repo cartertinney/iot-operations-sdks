@@ -1,63 +1,94 @@
 # Azure IoT Operation SDKs
 
-This repository is for active development of the Azure IoT Operations SDKs. Visit Microsoft Learn for more information and [developing edge applications](https://learn.microsoft.com/en-us/azure/iot-operations/create-edge-apps/edge-apps-overview) or other components of [Azure IoT Operations](https://learn.microsoft.com/en-us/azure/iot-operations/).
+## What is Azure IoT Operations?
 
-## Components
+*Azure IoT Operations* is a unified data plane for the edge. It's composed of a set of modular, scalable, and highly available data services that run on Azure Arc-enabled edge Kubernetes clusters. It enables data capture from various different systems and integrates with data modeling applications such as Microsoft Fabric to help organizations deploy the industrial metaverse.
+
+See [the Azure IoT Operations Learn](https://learn.microsoft.com/azure/iot-operations/) documentation to learn more about the product as well as detailed instructions on deployment and configuration.
+
+## Why use an SDK?
+
+The *Azure IoT Operations SDKs* are a suite of SDKs across multiple languages designed to assist in the development of applications for Azure IoT Operations.
+
+The focus of the SDKs it to assist customers in developing applications by providing the following features:
+
+| Feature | Description |
+|-|-|
+| Highly available | Provides infrastructure and guidance to build HA into your applications |
+| Any language | The SDKs target multiple languages to support any development environment |
+| Secure | Uses the latest crypto libraries and protocols |
+| Zero data loss | Builds on MQTT broker to remove data loss due to application failure |
+| Low latency | Optimised layering and tight MQTT client coupling minimized overheads |
+| Integration with IoT Operations services | Libraries provide access to services such as state store |
+| Simplify complex messaging | Provide support for communication between applications via MQTT5 using an RPC implementation |
+
+## Getting started
+
+This repository supports [GitHub Codespaces](https://github.com/features/codespaces). It provides a quick wayto get started with evaluationing the SDKs by creating a test K3d cluster to install IoT Operations in.
+
+1. Create a Codespace with this repository:
+
+   [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/Azure/iot-operations-sdks)
+
+1. Following the remaining [Quickstart](https://learn.microsoft.com/azure/iot-operations/get-started-end-to-end-sample/quickstart-deploy) to get IoT Operations up and running.
+
+1. Reconfigure IoT Operations ready for running samples and quickstarts:
+
+   ```bash
+   tools/deployment/deploy-aio.sh release
+   ```
+
+1. Run one of the quickstarts:
+
+## SDK Components
+
+### Component status
+
+:green_circle: Supported  
+:yellow_circle: In progress  
+:orange_circle: Planned  
+:red_circle: No plans
 
 ### Language libraries
 
 The repository contains the following libraries with the associated language support:
 
-:green_circle: Supported  
-:yellow_circle: In progress  
-:orange_circle: Planned  
-:red_circle: No plans  
-
-| Component | Description | [Go](./go) | [.NET](./dotnet) | [Rust](./rust) |
+| Component | Description | [.NET](./dotnet) | [Go](./go) | [Rust](./rust) |
 |-|-|-|-|-|
-| **Session client** | Creates the underlying MQTT client, authenticates against MQTT Broker and maintains the connection. | :green_circle: | :green_circle: | :green_circle: |
-| **State store client** | Client that enables interaction with the state store and provides the ability to get/set/delete and watch a key | :green_circle: | :yellow_circle: | :yellow_circle: |
-| **Lease lock client** | Create a lock for a shared resource | :green_circle: | :yellow_circle: | :yellow_circle: |
-| **Leader election client** | Assigns the elected application (leader) when multiple applications a deployed in a highly available configuration | :green_circle: | :yellow_circle: | :yellow_circle: |
-| **Schema registry client** | Interact with the schema registry | :green_circle: | :yellow_circle: | :yellow_circle: |
-| **Protocol compiler support** | Which languages are supported as outputs from the protocol compiler | :green_circle: | :yellow_circle: | :yellow_circle: |
+| **Session** client | Creates the underlying MQTT client, authenticates against MQTT Broker and maintains the connection. | :green_circle: | :green_circle: | :green_circle: |
+| **State store** client | Client that enables interaction with the state store and provides the ability to get/set/delete and watch a key | :green_circle: | :orange_circle: | :orange_circle: |
+| **Lease lock** client | Create a lock for a shared resource | :green_circle: | :orange_circle: | :orange_circle: |
+| **Leader election** client | Assigns the elected application (leader) when multiple applications a deployed in a highly available configuration | :green_circle: | :orange_circle: | :orange_circle: |
+| **Schema registry** client | Interact with the schema registry | :green_circle: | :orange_circle: | :orange_circle: |
+| **RPC** protocol | RPC (request/response) protocol build on top of MQTT5 | :green_circle: | :green_circle: | :green_circle: |
+| **Telemetry** protocol | Telemetry (publish) protocol build on top of MQTT5 | :green_circle: | :green_circle: | :orange_circle: |
 
-### Potocol compiler
+### Protocol compiler
+
+The Protocol compiler is a command line tool distributed as a NuGet package. It generates client libraries and server stubs in multiple languages.
+
+| Component | Description | [.NET](./dotnet) | [Go](./go) | [Rust](./rust) |
+|-|-|-|-|-|
+| **Protocol compiler** | The Protocol Compiler generates client libraries and server stubs from a DTDL definition. | :green_circle: | :yellow_circle:  | :yellow_circle:  |
+| [**JSON**](https://www.json.org/) Serialization | Json serialization support | :green_circle: | :green_circle: | :green_circle: |
+| [**Apache Avro**](https://avro.apache.org/) Serialization | Avro serialization support | :orange_circle: | :orange_circle: | :orange_circle: |
+| [**Protobuf**](https://protobuf.dev/) Serialization | Protobuf serialzation support| :orange_circle: | :orange_circle: | :orange_circle: |
+
+### Additional tools
+
+Other tools available for use during development of IoT Operation applications.
 
 | Tool | Description |
 |-|-|
-| **Protocol compiler** | The Protocol Compiler generates client libraries and server stubs from a DTDL definition |
-| **State store CLI** | The state store CLI allows you to interact with the state store independent of the client library |
+| **State store CLI** | Interact with the state store via a CLI. Get, set and delete keys. |
 
-## Getting started
+## Using the SDK
 
-1. Open the repository using GitHub Codespaces:
+Each langauge provides instructions and samples for using the SDK:
 
-   [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/Azure/iot-operations-sdks)
-
-1. Provide the following recommended secrets. These will be set as environment variables to assist installation:
-
-    |Name|Value|
-    |-|-|
-    |**SUBSCRIPTION_ID**|Your Azure subscription ID.|
-    |**RESOURCE_GROUP**|A name for a new Azure resource group where your cluster will be created|
-    |**LOCATION**|An Azure region close to you. The following regions are supported in public preview: `eastus`, `eastus2`, `westus`, `westus2`, `westeurope`, or `northeurope`|
-
-2. Continue following [Azure IoT Operations docs](https://learn.microsoft.com/azure/iot-operations/get-started/quickstart-deploy) to complete the deployment of IoT Operations.
-
-3. Configure IoT Operations for running the quickstart:
-
-   ```bash
-   .devcontainer/deploy-aio.sh release
-   ```
-
-## Packages available
-
-## Samples
-
-* Link to .NET
-* Link to Go
-* Link to Rust
+* [.NET](./dotnet/samples)
+* [Go](./go/samples)
+* [Rust](./rust/samples)
 
 ## Contributing
 

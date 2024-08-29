@@ -16,12 +16,6 @@
     "customizations": {
         "codespaces": {
             "repositories": {
-                "Azure-Samples/explore-iot-operations": {
-                    "permissions": "write-all"
-                },
-                "Azure-Samples/MqttApplicationSamples": {
-                    "permissions": "write-all"
-                }
             }
         },
         "vscode": {
@@ -67,7 +61,7 @@
     },
 
     "waitFor": "postCreateCommand",
-    "onCreateCommand": ".devcontainer/initialize-cluster.sh",
+    "onCreateCommand": "tools/deployment/initialize-cluster.sh",
     "postCreateCommand": "git pull",
     "postStartCommand": "sudo sh -c 'echo 127.0.0.1 aio-mq-dmqtt-frontend >> /etc/hosts'"
 }
