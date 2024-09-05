@@ -62,7 +62,7 @@ jobs:
           dotnet build -c Release codegen/src/Akri.Dtdl.Codegen/Akri.Dtdl.Codegen.csproj
           codegen=$(realpath codegen/src/Akri.Dtdl.Codegen/bin/Release/net8.0/Akri.Dtdl.Codegen)
           (pushd dotnet/samples/TestEnvoys; $codegen --modelFile ../../../eng/test/schema-samples/counter.json --sdkPath ../../src/Azure.Iot.Operations.Protocol --lang=csharp; popd)
-          (pushd go/samples/counter/envoy; $codegen --modelFile ../../../counter.json --lang go; popd)
+        #  (pushd go/samples/counter/envoy; $codegen --modelFile ../../../counter.json --lang go; popd)
         #  (pushd samples/rust/counter/counter_envoy; $codegen --modelFile ../../../counter.json --sdkPath ../../../../lib --lang rust; cargo fmt; popd)
 
       - name: Build dotnet
