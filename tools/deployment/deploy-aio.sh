@@ -15,12 +15,6 @@ echo "Installing $1 build"
 # change to deploy script directory
 cd $(dirname $(readlink -f $0))
 
-# clean up any deployed Broker pieces
-kubectl delete configmap client-ca-trust-bundle -n azure-iot-operations --ignore-not-found
-kubectl delete BrokerAuthentication -n azure-iot-operations --all
-kubectl delete BrokerListener -n azure-iot-operations --all
-kubectl delete Broker -n azure-iot-operations --all
-
 # add/upgrade the azure-iot-ops extension
 az extension add --upgrade --name azure-iot-ops
 
@@ -36,6 +30,12 @@ if [ "$1" = "nightly" ]; then
     helm uninstall broker --ignore-not-found
     helm install broker --atomic --create-namespace -n azure-iot-operations --version 0.7.0-nightly oci://mqbuilds.azurecr.io/helm/aio-broker --wait
 fi
+
+# clean up any deployed Broker pieces
+kubectl delete configmap client-ca-trust-bundle -n azure-iot-operations --ignore-not-found
+kubectl delete BrokerAuthentication -n azure-iot-operations --all
+kubectl delete BrokerListener -n azure-iot-operations --all
+kubectl delete Broker -n azure-iot-operations --all
 
 # install trust-manager with azure-iot-operations as the trusted domain
 helm upgrade trust-manager jetstack/trust-manager --install --create-namespace -n azure-iot-operations --set app.trust.namespace=azure-iot-operations --wait
