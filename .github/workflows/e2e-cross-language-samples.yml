@@ -33,16 +33,6 @@ jobs:
           tools/deployment/initialize-cluster.sh
           tools/deployment/deploy-aio.sh nightly
 
-      # - name: Setup Brokers
-      #   run: |
-      #     wget -q -O - https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
-      #     k3d cluster delete
-      #     k3d registry create registry.localhost --port 5500
-      #     k3d cluster create -p '1883:1883@loadbalancer' -p '2883:2883@loadbalancer' --registry-use k3d-registry.localhost:5500
-      #     helm install broker --atomic oci://mqbuilds.azurecr.io/helm/aio-broker --version 0.7.0-nightly
-      #     kubectl apply -f .devcontainer/mq/
-      #     kubectl apply -f .devcontainer/mosquitto/
-
       - name: Setup .NET
         if: matrix.counter_server == 'counter-server-dotnet' || matrix.counter_client == 'counter-client-dotnet'
         uses: actions/setup-dotnet@v4
@@ -86,30 +76,24 @@ jobs:
 
       - name: Run Counter Server dotnet
         if: matrix.counter_server == 'counter-server-dotnet'
-        run: |
-          dotnet/samples/CounterServer/bin/Release/net8.0/CounterServer --ConnectionStrings:Default="HostName=localhost;TcpPort=${{ matrix.broker_port}};UseTls=false;ClientId=${{ matrix.counter_server }}"
+        run: dotnet/samples/CounterServer/bin/Release/net8.0/CounterServer --ConnectionStrings:Default="HostName=localhost;TcpPort=${{ matrix.broker_port}};UseTls=false;ClientId=${{ matrix.counter_server }}" &
 
       - name: Run Counter Client dotnet
         if: matrix.counter_client == 'counter-client-dotnet'
-        run: |
-          dotnet/samples/CounterClient/bin/Release/net8.0/CounterClient --ConnectionStrings:Default="HostName=localhost;TcpPort=${{ matrix.broker_port }};UseTls=false" -e COUNTER_SERVER_ID=${{ matrix.counter_server }}
+        run: dotnet/samples/CounterClient/bin/Release/net8.0/CounterClient --ConnectionStrings:Default="HostName=localhost;TcpPort=${{ matrix.broker_port }};UseTls=false" -e COUNTER_SERVER_ID=${{ matrix.counter_server }} &
 
       - name: Run Counter Server go
         if: matrix.counter_server == 'counter-server-go'
-        run: |
-          MQTT_HOST_NAME=localhost MQTT_TCP_PORT=${{ matrix.broker_port}} MQTT_CLIENT_ID=${{ matrix.counter_server }} go/samples/counter/server/server
+        run: MQTT_HOST_NAME=localhost MQTT_TCP_PORT=${{ matrix.broker_port}} MQTT_CLIENT_ID=${{ matrix.counter_server }} go/samples/counter/server/server &
 
       - name: Run Counter Client go
         if: matrix.counter_client == 'counter-client-go'
-        run: |
-          MQTT_HOST_NAME=localhost MQTT_TCP_PORT=${{ matrix.broker_port}} MQTT_CLIENT_ID=counter-client-go COUNTER_SERVER_ID=${{ matrix.counter_server }} go/samples/counter/client/client
+        run: MQTT_HOST_NAME=localhost MQTT_TCP_PORT=${{ matrix.broker_port}} MQTT_CLIENT_ID=counter-client-go COUNTER_SERVER_ID=${{ matrix.counter_server }} go/samples/counter/client/client
 
       - name: Run Counter Server rust
         if: matrix.counter_server == 'counter-server-rust'
-        run: |
-          MQTT_HOST_NAME=localhost MQTT_TCP_PORT=${{ matrix.broker_port}} MQTT_USE_TLS=false MQTT_CLIENT_ID=${{ matrix.counter_server }} rust/target/release/examples/counter_server
+        run: MQTT_HOST_NAME=localhost MQTT_TCP_PORT=${{ matrix.broker_port}} MQTT_USE_TLS=false MQTT_CLIENT_ID=${{ matrix.counter_server }} rust/target/release/examples/counter_server
 
       - name: Run Counter Client rust
         if: matrix.counter_client == 'counter-client-rust'
-        run: |
-          MQTT_HOST_NAME=localhost MQTT_TCP_PORT=${{ matrix.broker_port}} MQTT_USE_TLS=false MQTT_CLIENT_ID=counter-client-rust COUNTER_SERVER_ID=${{ matrix.counter_server }} rust/target/release/examples/counter_client
+        run: MQTT_HOST_NAME=localhost MQTT_TCP_PORT=${{ matrix.broker_port}} MQTT_USE_TLS=false MQTT_CLIENT_ID=counter-client-rust COUNTER_SERVER_ID=${{ matrix.counter_server }} rust/target/release/examples/counter_client
