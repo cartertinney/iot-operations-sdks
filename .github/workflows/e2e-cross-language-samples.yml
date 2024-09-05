@@ -19,9 +19,9 @@ jobs:
       matrix:
         broker_port: [1883]
         counter_server:
-          [counter-server-dotnet, counter-server-rust] #, counter-server-go]
+          [counter-server-dotnet, counter-server-rust, counter-server-go]
         counter_client:
-          [counter-client-dotnet, counter-client-rust] #, counter-client-go]
+          [counter-client-dotnet, counter-client-rust, counter-client-go]
 
     steps:
       - uses: actions/checkout@v4
@@ -52,7 +52,7 @@ jobs:
           dotnet build -c Release codegen/src/Akri.Dtdl.Codegen/Akri.Dtdl.Codegen.csproj
           codegen=$(realpath codegen/src/Akri.Dtdl.Codegen/bin/Release/net8.0/Akri.Dtdl.Codegen)
           (pushd dotnet/samples/TestEnvoys; $codegen --modelFile ../../../eng/test/schema-samples/counter.json --sdkPath ../../src/Azure.Iot.Operations.Protocol --lang=csharp; popd)
-        #  (pushd go/samples/counter/envoy; $codegen --modelFile ../../../counter.json --lang go; popd)
+          (pushd go/samples/counter/envoy; $codegen --modelFile ../../../counter.json --lang go; popd)
         #  (pushd samples/rust/counter/counter_envoy; $codegen --modelFile ../../../counter.json --sdkPath ../../../../lib --lang rust; cargo fmt; popd)
 
       - name: Build dotnet
@@ -65,8 +65,8 @@ jobs:
         if: matrix.counter_server == 'counter-server-go' || matrix.counter_client == 'counter-client-go'
         run: |
           cd go
-          go build -o samples/counter/server/server samples/counter/server/server.go
-          go build -o samples/counter/client/client samples/counter/client/client.go
+          go build samples/counter/server/server.go
+          go build samples/counter/client/client.go
 
       - name: Build rust
         if: matrix.counter_server == 'counter-server-rust' || matrix.counter_client == 'counter-client-rust'
@@ -80,7 +80,7 @@ jobs:
 
       - name: Run Counter Server go
         if: matrix.counter_server == 'counter-server-go'
-        run: MQTT_HOST_NAME=localhost MQTT_TCP_PORT=${{ matrix.broker_port}} MQTT_CLIENT_ID=${{ matrix.counter_server }} go/samples/counter/server/server &
+        run: MQTT_HOST_NAME=localhost MQTT_TCP_PORT=${{ matrix.broker_port}} MQTT_CLIENT_ID=${{ matrix.counter_server }} go/server &
 
       - name: Run Counter Server rust
         if: matrix.counter_server == 'counter-server-rust'
@@ -92,7 +92,7 @@ jobs:
 
       - name: Run Counter Client go
         if: matrix.counter_client == 'counter-client-go'
-        run: MQTT_HOST_NAME=localhost MQTT_TCP_PORT=${{ matrix.broker_port}} MQTT_CLIENT_ID=counter-client-go COUNTER_SERVER_ID=${{ matrix.counter_server }} go/samples/counter/client/client
+        run: MQTT_HOST_NAME=localhost MQTT_TCP_PORT=${{ matrix.broker_port}} MQTT_CLIENT_ID=counter-client-go COUNTER_SERVER_ID=${{ matrix.counter_server }} go/client
 
       - name: Run Counter Client rust
         if: matrix.counter_client == 'counter-client-rust'
