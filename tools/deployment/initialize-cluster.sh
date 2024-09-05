@@ -16,12 +16,6 @@ then
     sudo dpkg -i /tmp/step-cli_amd64.deb
 fi
 
-# install Dapr
-if [ ! $(which dapr) ] 
-then
-    wget -q https://raw.githubusercontent.com/dapr/cli/master/install/install.sh -O - | /bin/bash
-fi
-
 # Create k3d cluster and forwarded ports (MQTT/MQTTS)
 k3d cluster delete
 k3d cluster create \
@@ -33,6 +27,3 @@ k3d cluster create \
 
 # Set the default context / namespace to azure-iot-operations
 kubectl config set-context k3d-k3s-default --namespace=azure-iot-operations
-
-# Initialise Dapr in the cluster
-dapr init -k
