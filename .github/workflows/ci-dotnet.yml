@@ -81,12 +81,12 @@ jobs:
     # This file is created by deploy-aio.sh
     - name: Load test service account token into environment
       run: |
-        if [ ! -f "./.devcontainer/token.txt" ]; then
+        if [ ! -f "./token.txt" ]; then
           echo "Missing 'token.txt' file"
           exit 1
         fi
 
-        echo "TOKEN_FILE_PATH=$(pwd)/.devcontainer/token.txt" >> $GITHUB_ENV
+        echo "TOKEN_FILE_PATH=$(pwd)/token.txt" >> $GITHUB_ENV
 
     # This file is created by deploy-aio.sh
     - name: Load CA certificate into environment
