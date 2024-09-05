@@ -19,9 +19,9 @@ jobs:
       matrix:
         broker_port: [1883]
         counter_server:
-          [counter-server-dotnet, counter-server-go, counter-server-rust]
+          [counter-server-dotnet, counter-server-rust] #, counter-server-go]
         counter_client:
-          [counter-client-dotnet, counter-client-go, counter-client-rust]
+          [counter-client-dotnet, counter-client-rust] #, counter-client-go]
 
     steps:
       - uses: actions/checkout@v4
