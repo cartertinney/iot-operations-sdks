@@ -1,5 +1,10 @@
 # Azure IoT Operation SDKs
 
+[![CI-dotnet](https://github.com/Azure/iot-operations-sdks/actions/workflows/ci-dotnet.yml/badge.svg)](https://github.com/Azure/iot-operations-sdks/actions/workflows/ci-dotnet.yml)
+[![CI-go](https://github.com/Azure/iot-operations-sdks/actions/workflows/ci-go.yml/badge.svg)](https://github.com/Azure/iot-operations-sdks/actions/workflows/ci-go.yml)
+[![CI-Rust](https://github.com/Azure/iot-operations-sdks/actions/workflows/ci-rust.yml/badge.svg)](https://github.com/Azure/iot-operations-sdks/actions/workflows/ci-rust.yml)
+[![e2e-cross-language-samples](https://github.com/Azure/iot-operations-sdks/actions/workflows/e2e-cross-language-samples.yml/badge.svg)](https://github.com/Azure/iot-operations-sdks/actions/workflows/e2e-cross-language-samples.yml)
+
 ## What is Azure IoT Operations?
 
 *Azure IoT Operations* is a unified data plane for the edge. It's composed of a set of modular, scalable, and highly available data services that run on Azure Arc-enabled edge Kubernetes clusters. It enables data capture from various different systems and integrates with data modeling applications such as Microsoft Fabric to help organizations deploy the industrial metaverse.
