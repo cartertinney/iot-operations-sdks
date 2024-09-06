@@ -9,23 +9,20 @@
         "storage": "64gb"
     },
     "features": {
+        "ghcr.io/devcontainers/features/rust:1": {},
         "ghcr.io/devcontainers/features/azure-cli:1": {
             "extensions": "connectedk8s,k8s-extension,azure-iot-ops"
         }
     },
     "customizations": {
-        "codespaces": {
-            "repositories": {
-            }
-        },
         "vscode": {
             "extensions": [
                 "vsciot-vscode.vscode-dtdl",
                 "ms-azuretools.vscode-docker",
                 "ms-kubernetes-tools.vscode-kubernetes-tools",
-                "ms-dotnettools.csharp",
-                "davidanson.vscode-markdownlint",
-                "mutantdino.resourcemonitor"
+                "ms-dotnettools.csdevkit",
+                "rust-lang.rust-analyzer",
+                "golang.go"
             ]
         },
         "settings": {
@@ -34,7 +31,6 @@
             "scm.defaultViewMode": "tree",
             "files.trimTrailingWhitespace": true,
             "files.trimFinalNewlines": true,
-            "files.insertFinalNewline": true,
             "telemetry.telemetryLevel": "off",
             "redhat.telemetry.enabled": false
         }
@@ -48,7 +44,6 @@
         8883,
         8884
     ],
-
     "waitFor": "postCreateCommand",
     "onCreateCommand": "tools/deployment/initialize-cluster.sh",
     "postCreateCommand": "git pull; tools/deployment/deploy-aio.sh nightly",
