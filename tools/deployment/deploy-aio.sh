@@ -3,17 +3,21 @@
 set -o errexit # fail if any command fails
 
 # check input args
-if [[ -z "$1" ]] || ! [[ "$1" =~ ^(nightly|release)$ ]]; then
+export deploy_type=$1
+if [[ -z "$deploy_type" ]] || ! [[ "$deploy_type" =~ ^(nightly|release)$ ]]; then
     echo "Error: Missing argument"
     echo "  Options are 'nightly' or 'release'"
     echo "  Example: './deploy-aio.sh nightly'"
     exit 1
 fi
 
-echo "Installing $1 build"
+echo "Installing $deploy_type build of MQTT Broker"
 
-# change to deploy script directory
-cd $(dirname $(readlink -f $0))
+# setup some variables, and change into the script directory
+export script_dir=$(dirname $(readlink -f $0))
+export session_dir=$script_dir/../../.session
+mkdir -p $session_dir
+cd $script_dir
 
 # add/upgrade the azure-iot-ops extension
 az extension add --upgrade --name azure-iot-ops
@@ -22,7 +26,7 @@ az extension add --upgrade --name azure-iot-ops
 helm repo add jetstack https://charts.jetstack.io --force-update
 helm repo update
 
-if [ "$1" = "nightly" ]; then
+if [ "$deploy_type" = "nightly" ]; then
     # install cert-manager
     helm upgrade cert-manager jetstack/cert-manager --install --create-namespace --version v1.13 --set installCRDs=true --set extraArgs={--enable-certificate-owner-ref=true} --wait
 
@@ -48,7 +52,7 @@ while ! kubectl get secret aio-broker-external-ca -n azure-iot-operations; do
     echo "Waiting for broker ca..."
     sleep 2
 done
-kubectl get secret aio-broker-external-ca -n azure-iot-operations -o jsonpath='{.data.ca\.crt}' | base64 -d >../../broker-ca.crt
+kubectl get secret aio-broker-external-ca -n azure-iot-operations -o jsonpath='{.data.ca\.crt}' | base64 -d > $session_dir/broker-ca.crt
 
 # create CA for client connections. This will not be used directly by a service so many of the fields are not applicable
 echo "my-ca-password" > /tmp/password.txt
@@ -62,7 +66,7 @@ step ca init \
     --provisioner=notapplicable
 
 # create client certificate
-step certificate create client ../../client.crt ../../client.key \
+step certificate create client $session_dir/client.crt $session_dir/client.key \
     -f \
     --not-after 8760h \
     --no-password \
@@ -76,8 +80,10 @@ kubectl create configmap client-ca-trust-bundle \
     -n azure-iot-operations \
     --from-literal=client_ca.pem="$(cat ~/.step/certs/intermediate_ca.crt ~/.step/certs/root_ca.crt)"
 
-# Create a SAT auth file testing
-kubectl create token default --namespace azure-iot-operations --duration=86400s --audience=aio-internal > ../../token.txt
+# Create a SAT auth file for local testing
+kubectl create token default --namespace azure-iot-operations --duration=86400s --audience=aio-internal > $session_dir/token.txt
 
 # setup new Broker
-kubectl apply -f yaml/aio-${1}.yaml
+kubectl apply -f yaml/aio-$deploy_type.yaml
+
+echo Setup complete, session related files are in the '.session' directory
