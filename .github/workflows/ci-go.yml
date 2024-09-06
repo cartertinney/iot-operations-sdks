@@ -61,7 +61,7 @@ jobs:
           exit 1
         fi
 
-        echo "CA_FILE_PATH=$(pwd).session/broker-ca.crt" >> $GITHUB_ENV
+        echo "CA_FILE_PATH=$(pwd)/.session/broker-ca.crt" >> $GITHUB_ENV
 
     # These files are created by deploy-aio.sh
     - name: Load client certificates into environment
