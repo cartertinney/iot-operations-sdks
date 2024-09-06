@@ -22,9 +22,16 @@ To refresh the dependencies, execute the following:
     dotnet restore --no-cache
     ```
 
-1. Repeat for the `codegen` directory:
+1. Repeat for the `codegen`:
 
     ```bash
     cd ../codegen
     dotnet restore --no-cache
     ```
+
+1. Repeat for the `faultablemqttbroker`:
+
+    ```bash
+    cd ../eng/test/faultablemqttbroker/src/Azure.Iot.Operations.FaultableMqttBroker
+    dotnet restore --no-cache
+    ```    
