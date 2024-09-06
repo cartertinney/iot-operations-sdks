@@ -6,4 +6,5 @@ use (
 	./samples/counter/client
 	./samples/counter/envoy
 	./samples/counter/server
+    ./test/protocol
 )
