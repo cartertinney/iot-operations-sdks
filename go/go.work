@@ -1,0 +1,10 @@
+go 1.21
+
+use (
+	./mqtt
+	./protocol
+	./samples/counter/client
+	./samples/counter/envoy
+	./samples/counter/server
+    ./test/protocol
+)
