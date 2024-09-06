@@ -46,12 +46,18 @@ This repository supports [GitHub Codespaces](https://github.com/features/codespa
 
 1. Run one of the quickstarts:
     
-    * [Go](./go)
-    * [Rust](./rust])
-    * 
- 
+    * [Go](./go/quickstart)
+    * [.NET](./dotnet/quickstart)
+    * [Rust](./rust/quickstart)
 
 ## SDK Components
+
+Code, samples and usage documentation for each SDK is available repository subdirectories:
+
+* [Go SDK](./go)
+* [.NET SDK](./dotnet)
+* [Rust SDK](./rust)
+* [Protocol Compiler](./codegen)
 
 ### Component status
 
@@ -80,26 +86,18 @@ The Protocol compiler is a command line tool distributed as a NuGet package. It 
 
 | Component | Description | [.NET](./dotnet) | [Go](./go) | [Rust](./rust) |
 |-|-|-|-|-|
-| **Protocol compiler** | The Protocol Compiler generates client libraries and server stubs from a DTDL definition. | :green_circle: | :yellow_circle:  | :yellow_circle:  |
-| [**JSON**](https://www.json.org/) Serialization | Json serialization support | :green_circle: | :green_circle: | :green_circle: |
-| [**Apache Avro**](https://avro.apache.org/) Serialization | Avro serialization support | :orange_circle: | :orange_circle: | :orange_circle: |
+| **Protocol compiler CLI** | The Protocol Compiler generates client libraries and server stubs from a DTDL definition. | :green_circle: | :yellow_circle:  | :yellow_circle:  |
+| [**JSON**](https://www.json.org/) Serialization | Json serialization support | :green_circle: | :yellow_circle:  | :yellow_circle:  |
+| [**Apache Avro**](https://avro.apache.org/) Serialization | Avro serialization support | :green_circle: | :orange_circle: | :orange_circle: |
 | [**Protobuf**](https://protobuf.dev/) Serialization | Protobuf serialzation support| :orange_circle: | :orange_circle: | :orange_circle: |
 
-### Additional tools
+### Additional tooling
 
 Other tools available for use during development of IoT Operation applications.
 
-| Tool | Description |
-|-|-|
-| **State store CLI** | Interact with the state store via a CLI. Get, set and delete keys. |
-
-## Using the SDK
-
-Each language provides getting started and samples for using the SDK:
-
-* [.NET](./dotnet)
-* [Go](./go)
-* [Rust](./rust)
+| Tool | Description | Status |
+|-|-|-|
+| **State store CLI** | Interact with the state store via a CLI. Get, set and delete keys. | :yellow_circle: |
 
 ## Contributing
 

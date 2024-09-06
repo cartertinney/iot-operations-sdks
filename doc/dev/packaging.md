@@ -1,10 +1,12 @@
 # Packaging
 
-## C#
+The following document contains developer information on packaging the various SDKs and tools in this repository.
 
-The IoT Operations NuGet feed is configured to use the https://api.nuget.org/v3/index.json as the upstream feed. 
+## .NET SDK
 
-If you are receiving the following error, you may need to manually refresh the upstream dependencies in IoT Operations feed.
+The Azure IoT Operations NuGet feed is configured to use the https://api.nuget.org/v3/index.json as an upstream feed. 
+
+If you are receiving the following error, you may need to manually refresh the upstream dependencies to the Azure IoT Operations feed.
 
 ```output
 Response status code does not indicate success: 401 (Unauthorized - No local versions of package '***'; please provide authentication to access versions from upstream that have not yet been saved to your feed.
