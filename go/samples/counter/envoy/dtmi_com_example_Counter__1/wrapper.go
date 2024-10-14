@@ -3,7 +3,6 @@ package dtmi_com_example_Counter__1
 
 import (
 	"github.com/Azure/iot-operations-sdks/go/protocol"
-	"github.com/Azure/iot-operations-sdks/go/protocol/mqtt"
 )
 
 type CounterService struct {
@@ -25,7 +24,7 @@ const (
 )
 
 func NewCounterService(
-	client mqtt.Client,
+	client protocol.Client,
 	readCounterHandler protocol.CommandHandler[any, ReadCounterCommandResponse],
 	incrementHandler protocol.CommandHandler[any, IncrementCommandResponse],
 	resetHandler protocol.CommandHandler[any, any],
@@ -85,7 +84,7 @@ func NewCounterService(
 }
 
 func NewCounterClient(
-	client mqtt.Client,
+	client protocol.Client,
 	opts ...protocol.Option,
 ) (*CounterClient, error) {
 	var err error

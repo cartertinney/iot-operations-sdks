@@ -6,7 +6,6 @@ import (
 
 	"github.com/Azure/iot-operations-sdks/go/protocol"
 	"github.com/Azure/iot-operations-sdks/go/protocol/iso"
-	"github.com/Azure/iot-operations-sdks/go/protocol/mqtt"
 )
 
 type (
@@ -72,7 +71,7 @@ var (
 )
 
 func NewGreeterServer(
-	client mqtt.Client,
+	client protocol.Client,
 	handlers GreeterHandlers,
 	opts ...protocol.CommandExecutorOption,
 ) (*GreeterServer, error) {
@@ -119,7 +118,7 @@ func NewGreeterServer(
 }
 
 func NewGreeterClient(
-	client mqtt.Client,
+	client protocol.Client,
 	opts ...protocol.CommandInvokerOption,
 ) (*GreeterClient, error) {
 	c := &GreeterClient{}

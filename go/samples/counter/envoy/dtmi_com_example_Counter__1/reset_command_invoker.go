@@ -5,7 +5,6 @@ import (
 	"context"
 
 	"github.com/Azure/iot-operations-sdks/go/protocol"
-	"github.com/Azure/iot-operations-sdks/go/protocol/mqtt"
 )
 
 type ResetCommandInvoker struct {
@@ -13,7 +12,7 @@ type ResetCommandInvoker struct {
 }
 
 func NewResetCommandInvoker(
-	client mqtt.Client,
+	client protocol.Client,
 	requestTopic string,
 	opt ...protocol.CommandInvokerOption,
 ) (*ResetCommandInvoker, error) {

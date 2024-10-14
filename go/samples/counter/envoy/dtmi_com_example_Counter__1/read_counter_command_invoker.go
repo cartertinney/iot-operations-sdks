@@ -5,7 +5,6 @@ import (
 	"context"
 
 	"github.com/Azure/iot-operations-sdks/go/protocol"
-	"github.com/Azure/iot-operations-sdks/go/protocol/mqtt"
 )
 
 type ReadCounterCommandInvoker struct {
@@ -13,7 +12,7 @@ type ReadCounterCommandInvoker struct {
 }
 
 func NewReadCounterCommandInvoker(
-	client mqtt.Client,
+	client protocol.Client,
 	requestTopic string,
 	opt ...protocol.CommandInvokerOption,
 ) (*ReadCounterCommandInvoker, error) {

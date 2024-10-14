@@ -3,7 +3,6 @@ package dtmi_com_example_Counter__1
 
 import (
 	"github.com/Azure/iot-operations-sdks/go/protocol"
-	"github.com/Azure/iot-operations-sdks/go/protocol/mqtt"
 )
 
 type IncrementCommandExecutor struct {
@@ -11,7 +10,7 @@ type IncrementCommandExecutor struct {
 }
 
 func NewIncrementCommandExecutor(
-	client mqtt.Client,
+	client protocol.Client,
 	requestTopic string,
 	handler protocol.CommandHandler[any, IncrementCommandResponse],
 	opt ...protocol.CommandExecutorOption,
