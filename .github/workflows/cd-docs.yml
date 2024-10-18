@@ -58,7 +58,7 @@ jobs:
         run: |
           cd rust/rust
           cargo doc --no-deps
-          cp -a target/doc _site/rust
+          cp -a target/doc ../../_site/rust
 
 #      - name: Build Go docs
 #      - name: Build .NET docs
