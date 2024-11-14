@@ -46,22 +46,22 @@ prologue:
 Cases that test protocol conformance will generally include at least an `actions` region and often also an `epilogue` region:
 
 ```yaml
-test-name: TelemetryReceiverReceivesMalformedPayload_NotRelayed
+test-name: TelemetrySenderSendOne_Success
 description:
   condition: >-
-    TelemetryReceiver receives telemetry with payload that cannot deserialize.
+    TelemetrySender sends a single Telemetry.
   expect: >-
-    TelemetryReceiver does not relay telemetry to user code.
+    TelemetrySender performs send.
 prologue:
-  receivers:
+  senders:
   - { }
 actions:
-- action: receive telemetry
-  payload: '{ "invalid" "json" }'
-  bypass-serialization: true
+- action: send telemetry
+- action: await publish
 epilogue:
-  acknowledgement-count: 0 # is this correct behavior?
-  telemetry-count: 0
+  published-messages:
+  - topic: "mock/test"
+    payload: "Test_Telemetry"
 ```
 
 ### Key/value kinds
@@ -989,7 +989,13 @@ A `receive telemetry` action causes the TelemetryReceiver to receive a telemetry
 ```yaml
 - action: receive telemetry
   metadata:
-    "telemHeader": "telemValue"
+    "id": "dtmi:test:someAssignedId;1"
+    "source": "dtmi:test:myEventSource;1"
+    "type": "test-type"
+    "specversion": "1.0"
+    "datacontenttype": "application/json"
+    "subject": "mock/test"
+    "dataschema": "dtmi:test:MyModel:_contents:__test;1"
   packet-index: 0
 ```
 
@@ -1081,6 +1087,7 @@ Each element of the `senders` array can have the following child keys:
 | telemetry-name | drive | no | string or null | "test" | The name of the Telemetry. |
 | telemetry-topic | drive | no | string or null | "mock/test" | The MQTT topic pattern for the Telemetry. |
 | model-id | drive | no | string or null | "dtmi:test:MyModel;1" | The identifier of the the service model, which is the full DTMI of the Interface. |
+| data-schema | drive | no | string or null | "dtmi:test:MyModel:_contents:__test;1" | The data schema to use in a cloud event when associated with the telemetry. |
 | topic-namespace | drive | no | string or null | null | A leading namespace for the Telemetry MQTT topic patterns. |
 | custom-token-map | drive | no | map from string to string | { } | A map from custom topic tokens to replacement values. |
 
@@ -1103,6 +1110,7 @@ epilogue:
       "specversion": "1.0"
       "datacontenttype": "application/json"
       "subject": "mock/test"
+      "dataschema": "dtmi:test:MyModel:_contents:__test;1"
 ```
 
 #### SenderEpilogue
