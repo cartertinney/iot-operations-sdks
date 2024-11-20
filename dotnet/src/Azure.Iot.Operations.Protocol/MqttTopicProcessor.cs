@@ -1,7 +1,6 @@
 ﻿using Azure.Iot.Operations.Protocol.Models;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text.RegularExpressions;
 
 namespace Azure.Iot.Operations.Protocol
@@ -11,7 +10,7 @@ namespace Azure.Iot.Operations.Protocol
     /// </summary>
     internal static partial class MqttTopicProcessor
     {
-        private static readonly Regex replaceableTokenRegex = MyRegex();
+        private static readonly Regex replaceableTokenRegex = new("{([^}]+)}");
 
         /// <summary>
         /// Determine whether a string is valid for use as a replacement string in a custom replacement map or a topic namespace.
@@ -41,22 +40,6 @@ namespace Azure.Iot.Operations.Protocol
         public static bool DoesTopicMatchFilter(string topic, string filter)
         {
             return MqttTopicFilterComparer.Compare(topic, filter) == MqttTopicFilterCompareResult.IsMatch;
-        }
-
-        public static bool TryGetFieldValue(string pattern, string topic, string token, out string value)
-        {
-            int tokenPos = pattern.IndexOf(token, StringComparison.InvariantCulture);
-            if (tokenPos < 0)
-            {
-                value = string.Empty;
-                return false;
-            }
-            else
-            {
-                int depth = pattern[..tokenPos].Count(c => c == '/');
-                value = topic.Split('/')[depth];
-                return true;
-            }
         }
 
         /// <summary>
@@ -189,8 +172,5 @@ namespace Azure.Iot.Operations.Protocol
                 ? pattern
                 : replaceableTokenRegex.Replace(pattern, (Match match) => tokenMap.TryGetValue(match.Groups[1].Captures[0].Value, out string? value) ? value : match.Groups[0].Captures[0].Value);
         }
-
-        [GeneratedRegex("{([^}]+)}")]
-        private static partial Regex MyRegex();
     }
 }
