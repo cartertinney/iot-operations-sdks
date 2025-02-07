@@ -12,12 +12,10 @@ use tokio::sync::oneshot;
 use tokio::time::{timeout, Instant};
 use tokio_util::sync::CancellationToken;
 
-use super::StatusCode;
-use crate::application::ApplicationHybridLogicalClock;
 use crate::{
-    application::ApplicationContext,
+    application::{ApplicationContext, ApplicationHybridLogicalClock},
     common::{
-        aio_protocol_error::{AIOProtocolError, Value},
+        aio_protocol_error::{AIOProtocolError, AIOProtocolErrorKind, Value},
         hybrid_logical_clock::HybridLogicalClock,
         is_invalid_utf8,
         payload_serialize::{
@@ -26,7 +24,7 @@ use crate::{
         topic_processor::{contains_invalid_char, is_valid_replacement, TopicPattern},
         user_properties::{validate_user_properties, UserProperty},
     },
-    rpc::{DEFAULT_RPC_PROTOCOL_VERSION, RPC_PROTOCOL_VERSION},
+    rpc::{StatusCode, DEFAULT_RPC_PROTOCOL_VERSION, RPC_PROTOCOL_VERSION},
     supported_protocol_major_versions_to_string, ProtocolVersion,
 };
 
@@ -281,7 +279,7 @@ pub struct CommandExecutorOptions {
 /// # use azure_iot_operations_mqtt::MqttConnectionSettingsBuilder;
 /// # use azure_iot_operations_mqtt::session::{Session, SessionOptionsBuilder};
 /// # use azure_iot_operations_protocol::rpc::command_executor::{CommandExecutor, CommandExecutorOptionsBuilder, CommandResponse, CommandResponseBuilder, CommandRequest};
-/// # use azure_iot_operations_protocol::application::{ApplicationContext, ApplicationContextOptionsBuilder};
+/// # use azure_iot_operations_protocol::application::ApplicationContextBuilder;
 /// # let mut connection_settings = MqttConnectionSettingsBuilder::default()
 /// #     .client_id("test_server")
 /// #     .hostname("localhost")
@@ -291,7 +289,7 @@ pub struct CommandExecutorOptions {
 /// #     .connection_settings(connection_settings)
 /// #     .build().unwrap();
 /// # let mut mqtt_session = Session::new(session_options).unwrap();
-/// # let application_context = ApplicationContext::new(ApplicationContextOptionsBuilder::default().build().unwrap());
+/// # let application_context = ApplicationContextBuilder::default().build().unwrap();;
 /// let executor_options = CommandExecutorOptionsBuilder::default()
 ///   .command_name("test_command")
 ///   .request_topic_pattern("test/request")
@@ -314,6 +312,7 @@ where
     C::PubReceiver: Send + Sync + 'static,
 {
     // Static properties of the executor
+    application_hlc: Arc<ApplicationHybridLogicalClock>,
     mqtt_client: C,
     mqtt_receiver: C::PubReceiver,
     is_idempotent: bool,
@@ -322,7 +321,6 @@ where
     cacheable_duration: Duration,
     request_payload_type: PhantomData<TReq>,
     response_payload_type: PhantomData<TResp>,
-    application_hlc: Arc<ApplicationHybridLogicalClock>,
     // Describes state
     executor_state: CommandExecutorState,
     // Information to manage state
@@ -416,6 +414,7 @@ where
 
         // Create Command executor
         Ok(CommandExecutor {
+            application_hlc: application_context.application_hlc,
             mqtt_client: client,
             mqtt_receiver,
             is_idempotent: executor_options.is_idempotent,
@@ -424,7 +423,6 @@ where
             cacheable_duration: executor_options.cacheable_duration,
             request_payload_type: PhantomData,
             response_payload_type: PhantomData,
-            application_hlc: application_context.application_hlc,
             executor_state: CommandExecutorState::New,
             executor_cancellation_token: CancellationToken::new(),
         })
@@ -736,6 +734,26 @@ where
                             Ok(UserProperty::Timestamp) => {
                                 match HybridLogicalClock::from_str(&value) {
                                     Ok(ts) => {
+                                        // Update application HLC against received __ts
+                                        if let Err(e) = self.application_hlc.update(&ts) {
+                                            response_arguments.status_message = Some(format!("Failure updating application HLC against {value}: {e}"));
+                                            response_arguments.invalid_property_name =
+                                                Some(UserProperty::Timestamp.to_string());
+                                            response_arguments.invalid_property_value = Some(value);
+                                            match e.kind {
+                                                AIOProtocolErrorKind::StateInvalid => {
+                                                    response_arguments.status_code =
+                                                        StatusCode::ServiceUnavailable;
+                                                }
+                                                _ => {
+                                                    // AIOProtocolErrorKind::InternalLogicError should route here,
+                                                    // but anything unexpected should also be classified as InternalServerError
+                                                    response_arguments.status_code =
+                                                        StatusCode::InternalServerError;
+                                                }
+                                            }
+                                            break 'process_request;
+                                        }
                                         timestamp = Some(ts);
                                     }
                                     Err(e) => {
@@ -838,6 +856,7 @@ where
                     if command_expiration_time.elapsed().is_zero() {
                         // Elapsed returns zero if the time has not passed
                         tokio::task::spawn({
+                            let app_hlc_clone = self.application_hlc.clone();
                             let client_clone = self.mqtt_client.clone();
                             let executor_cancellation_token_clone =
                                 self.executor_cancellation_token.clone();
@@ -846,6 +865,7 @@ where
                                 tokio::select! {
                                     () = executor_cancellation_token_clone.cancelled() => { /* executor dropped */},
                                     () = Self::process_command(
+                                        app_hlc_clone,
                                         client_clone,
                                         pkid,
                                         response_arguments,
@@ -871,6 +891,7 @@ where
                 }
 
                 tokio::task::spawn({
+                    let app_hlc_clone = self.application_hlc.clone();
                     let client_clone = self.mqtt_client.clone();
                     let executor_cancellation_token_clone =
                         self.executor_cancellation_token.clone();
@@ -879,6 +900,7 @@ where
                         tokio::select! {
                             () = executor_cancellation_token_clone.cancelled() => { /* executor dropped */},
                             () = Self::process_command(
+                                app_hlc_clone,
                                 client_clone,
                                 pkid,
                                 response_arguments,
@@ -912,6 +934,7 @@ where
     }
 
     async fn process_command(
+        application_hlc: Arc<ApplicationHybridLogicalClock>,
         client: C,
         pkid: u16,
         mut response_arguments: ResponseArguments,
@@ -1007,10 +1030,12 @@ where
             RPC_PROTOCOL_VERSION.to_string(),
         ));
 
-        user_properties.push((
-            UserProperty::Timestamp.to_string(),
-            HybridLogicalClock::new().to_string(),
-        ));
+        // Update HLC and use as the timestamp.
+        // If there are errors updating the HLC (unlikely when updating against now),
+        // the timestamp will not be added.
+        if let Ok(timestamp_str) = application_hlc.update_now() {
+            user_properties.push((UserProperty::Timestamp.to_string(), timestamp_str));
+        }
 
         if let Some(status_message) = response_arguments.status_message {
             log::error!(
@@ -1242,7 +1267,7 @@ mod tests {
     use azure_iot_operations_mqtt::MqttConnectionSettingsBuilder;
 
     use super::*;
-    use crate::application::ApplicationContextOptionsBuilder;
+    use crate::application::ApplicationContextBuilder;
     use crate::common::{aio_protocol_error::AIOProtocolErrorKind, payload_serialize::MockPayload};
 
     // TODO: This should return a mock ManagedClient instead.
@@ -1280,7 +1305,7 @@ mod tests {
             .unwrap();
 
         let command_executor: CommandExecutor<MockPayload, MockPayload, _> = CommandExecutor::new(
-            ApplicationContext::new(ApplicationContextOptionsBuilder::default().build().unwrap()),
+            ApplicationContextBuilder::default().build().unwrap(),
             managed_client,
             executor_options,
         )
@@ -1311,7 +1336,7 @@ mod tests {
             .unwrap();
 
         let command_executor: CommandExecutor<MockPayload, MockPayload, _> = CommandExecutor::new(
-            ApplicationContext::new(ApplicationContextOptionsBuilder::default().build().unwrap()),
+            ApplicationContextBuilder::default().build().unwrap(),
             managed_client,
             executor_options,
         )
@@ -1342,9 +1367,7 @@ mod tests {
 
         let executor: Result<CommandExecutor<MockPayload, MockPayload, _>, AIOProtocolError> =
             CommandExecutor::new(
-                ApplicationContext::new(
-                    ApplicationContextOptionsBuilder::default().build().unwrap(),
-                ),
+                ApplicationContextBuilder::default().build().unwrap(),
                 managed_client,
                 executor_options,
             );
@@ -1382,9 +1405,7 @@ mod tests {
 
         let executor: Result<CommandExecutor<MockPayload, MockPayload, _>, AIOProtocolError> =
             CommandExecutor::new(
-                ApplicationContext::new(
-                    ApplicationContextOptionsBuilder::default().build().unwrap(),
-                ),
+                ApplicationContextBuilder::default().build().unwrap(),
                 managed_client,
                 executor_options,
             );
@@ -1425,9 +1446,7 @@ mod tests {
 
         let executor: Result<CommandExecutor<MockPayload, MockPayload, _>, AIOProtocolError> =
             CommandExecutor::new(
-                ApplicationContext::new(
-                    ApplicationContextOptionsBuilder::default().build().unwrap(),
-                ),
+                ApplicationContextBuilder::default().build().unwrap(),
                 managed_client,
                 executor_options,
             );
@@ -1463,7 +1482,7 @@ mod tests {
             .unwrap();
 
         let command_executor = CommandExecutor::<MockPayload, MockPayload, _>::new(
-            ApplicationContext::new(ApplicationContextOptionsBuilder::default().build().unwrap()),
+            ApplicationContextBuilder::default().build().unwrap(),
             managed_client,
             executor_options,
         );
@@ -1487,7 +1506,7 @@ mod tests {
             CommandExecutor<MockPayload, MockPayload, _>,
             AIOProtocolError,
         > = CommandExecutor::new(
-            ApplicationContext::new(ApplicationContextOptionsBuilder::default().build().unwrap()),
+            ApplicationContextBuilder::default().build().unwrap(),
             managed_client,
             executor_options,
         );
@@ -1518,9 +1537,7 @@ mod tests {
             .unwrap();
         let mut command_executor: CommandExecutor<MockPayload, MockPayload, _> =
             CommandExecutor::new(
-                ApplicationContext::new(
-                    ApplicationContextOptionsBuilder::default().build().unwrap(),
-                ),
+                ApplicationContextBuilder::default().build().unwrap(),
                 session.create_managed_client(),
                 executor_options,
             )
