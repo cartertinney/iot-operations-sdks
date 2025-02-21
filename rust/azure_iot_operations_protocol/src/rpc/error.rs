@@ -10,10 +10,13 @@ use crate::ProtocolVersion;
 pub struct RPCError {
     /// The kind of error that occurred
     kind: RPCErrorKind,
-    /// Indicates whether the error was detected prior to attempted network communication
-    is_shallow: bool,
     /// Source of the error, if any
     source: Option<Box<dyn std::error::Error>>,
+    /// Indicates whether the error was detected prior to attempted network communication
+    is_shallow: bool,
+    /// Command name
+    /// TODO: do we want this Optional?
+    command_name: Option<String>,
 }
 
 impl RPCError {
@@ -22,19 +25,9 @@ impl RPCError {
         &self.kind
     }
 
-    /// Indicates whether the error was detected in user-supplied code
-    pub fn in_application(&self) -> bool {
-        unimplemented!()
-    }
-
     /// Indicates whether the error was detected by a remote component
     pub fn is_remote(&self) -> bool {
-
-        self.source.is_some_and(|e| e.is(RemoteError))
-        // if self.source.is_some_and(|e| e.is::<RemoteError>()) {
-        //     return true;
-        // }
-        // false
+        self.source.as_ref().is_some_and(|e| e.downcast_ref::<RemoteError>().is_some())
     }
 
     /// Indicates whether the error was detected prior to attempted network communication

@@ -10,6 +10,23 @@ use super::aio_protocol_error::{AIOProtocolError, Value};
 /// Wildcard token
 pub const WILDCARD: &str = "+";
 
+
+#[derive(thiserror::Error, Debug)]
+pub(crate) enum TopicPatternError {
+    #[error("MQTT topic pattern contains empty levels")]
+    EmptyLevel,
+    #[error("MQTT topic pattern starts with reserved character: {0}")]
+    StartsWithReservedChar(char),       // TODO: should this be more specific?
+    #[error("MQTT topic pattern contains invalid characters")]
+    InvalidCharacters,
+    #[error("MQTT topic pattern contains invalid characters in token '{0}'")]
+    InvalidTokenCharacters(String),
+    #[error("MQTT topic pattern contains empty token")]
+    EmptyToken,
+    #[error("Mqtt topic pattern contains adjacent tokens")]
+    AdjacentTokens,
+}
+
 /// Check if a string contains invalid characters specified in [topic-structure.md](https://github.com/Azure/iot-operations-sdks/blob/main/doc/reference/topic-structure.md)
 ///
 /// Returns true if the string contains any of the following:
@@ -77,30 +94,18 @@ impl TopicPattern {
     /// If any regex group is not present when it is expected to be, which is impossible given
     /// that there is only one group in the regex pattern.
     pub fn new<'a>(
-        property_name: &'a str,
+        //property_name: &'a str,
         pattern: &'a str,
         share_name: Option<String>,
         topic_namespace: Option<&str>,
         topic_token_map: &'a HashMap<String, String>,
     ) -> Result<Self, AIOProtocolError> {
         if pattern.trim().is_empty() {
-            return Err(AIOProtocolError::new_configuration_invalid_error(
-                None,
-                property_name,
-                Value::String(pattern.to_string()),
-                Some("MQTT topic pattern must not be whitespace or empty".to_string()),
-                None,
-            ));
+            return Err(TopicPatternError::EmptyLevel)
         }
 
         if pattern.starts_with('$') {
-            return Err(AIOProtocolError::new_configuration_invalid_error(
-                None,
-                property_name,
-                Value::String(pattern.to_string()),
-                Some("MQTT topic pattern starts with reserved character '$'".to_string()),
-                None,
-            ));
+            return Err(TopicPatternError::StartsWithReservedChar("$"))
         }
 
         if let Some(share_name) = &share_name {
@@ -123,13 +128,7 @@ impl TopicPattern {
             Regex::new(r"((^\s*/)|(/\s*/)|(/\s*$))").expect("Static regex string should not fail");
 
         if empty_level_regex.is_match(pattern) {
-            return Err(AIOProtocolError::new_configuration_invalid_error(
-                None,
-                property_name,
-                Value::String(pattern.to_string()),
-                Some("MQTT topic pattern contains empty levels".to_string()),
-                None,
-            ));
+            return Err(TopicPatternError::EmptyLevel);
         }
 
         // Used to accumulate the pattern as checks and replacements are made
@@ -167,23 +166,11 @@ impl TopicPattern {
             let token_without_braces = &token_with_braces[1..token_with_braces.len() - 1];
 
             if token_without_braces.trim().is_empty() {
-                return Err(AIOProtocolError::new_configuration_invalid_error(
-                    None,
-                    property_name,
-                    Value::String(pattern.to_string()),
-                    Some("MQTT topic pattern contains empty token".to_string()),
-                    None,
-                ));
+                return Err(TopicPatternError::EmptyToken);
             }
 
             if last_end_index != 0 && last_end_index == token_capture.start() {
-                return Err(AIOProtocolError::new_configuration_invalid_error(
-                    None,
-                    property_name,
-                    Value::String(pattern.to_string()),
-                    Some("MQTT topic pattern contains adjacent tokens".to_string()),
-                    None,
-                ));
+                return Err(TopicPatternError::AdjacentTokens);
             }
 
             last_end_index = token_capture.end();
@@ -192,28 +179,14 @@ impl TopicPattern {
 
             // Check if the accumulated part of the pattern is valid
             if invalid_regex.is_match(acc) {
-                return Err(AIOProtocolError::new_configuration_invalid_error(
-                    None,
-                    property_name,
-                    Value::String(pattern.to_string()),
-                    Some("MQTT topic pattern contains invalid characters".to_string()),
-                    None,
-                ));
+                return Err(TopicPatternError::InvalidCharacters);
             }
 
             acc_pattern.push_str(acc);
 
             // Check if the token is valid
             if invalid_regex.is_match(token_without_braces) || token_without_braces.contains('/') {
-                return Err(AIOProtocolError::new_configuration_invalid_error(
-                    None,
-                    property_name,
-                    Value::String(pattern.to_string()),
-                    Some(format!(
-                        "MQTT topic pattern contains invalid characters in token '{token_without_braces}'",
-                    )),
-                    None,
-                ));
+                return Err(TopicPatternError::InvalidTokenCharacters(token_without_braces.to_string()));
             }
 
             // Check if the replacement is valid

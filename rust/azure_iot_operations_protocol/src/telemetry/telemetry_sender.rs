@@ -25,6 +25,9 @@ use crate::{
         cloud_event::{
             CloudEventFields, DEFAULT_CLOUD_EVENT_EVENT_TYPE, DEFAULT_CLOUD_EVENT_SPEC_VERSION,
         },
+        error:: {
+            TelemetryError, TelemetryErrorKind,
+        },
         TELEMETRY_PROTOCOL_VERSION,
     },
 };
@@ -191,32 +194,27 @@ impl<T: PayloadSerialize> TelemetryMessageBuilder<T> {
     /// Add a payload to the telemetry message. Validates successful serialization of the payload.
     ///
     /// # Errors
-    /// [`AIOProtocolError`] of kind [`PayloadInvalid`](crate::common::aio_protocol_error::AIOProtocolErrorKind::PayloadInvalid) if serialization of the payload fails
+    /// [`TelemetryError`] of kind [`PayloadInvalid`](crate::telemetry::error::TelemetryErrorKind::PayloadInvalid) if serialization of the payload fails
     ///
-    /// [`AIOProtocolError`] of kind [`ConfigurationInvalid`](crate::common::aio_protocol_error::AIOProtocolErrorKind::ConfigurationInvalid) if the content type is not valid utf-8
-    pub fn payload(&mut self, payload: T) -> Result<&mut Self, AIOProtocolError> {
+    /// [`TelemetryError`] of kind [`ConfigurationInvalid`](crate::telemetry::error::TelemetryErrorKind::ConfigurationInvalid) if the content type is not valid utf-8
+    pub fn payload(&mut self, payload: T) -> Result<&mut Self, TelemetryError> {
         match payload.serialize() {
-            Err(e) => Err(AIOProtocolError::new_payload_invalid_error(
-                true,
-                false,
+            Err(e) => Err(TelemetryError::new(
+                TelemetryErrorKind::PayloadInvalid,
                 Some(e.into()),
-                None,
-                Some("Payload serialization error".to_string()),
-                None,
+                true,
+                //message: "Payload serialization error".to_string()
             )),
+
             Ok(serialized_payload) => {
                 // Validate content type of telemetry message is valid UTF-8
                 if is_invalid_utf8(&serialized_payload.content_type) {
-                    return Err(AIOProtocolError::new_configuration_invalid_error(
+                    return Err(TelemetryError::new(
+                        TelemetryErrorKind::ConfigurationInvalid,
                         None,
-                        "content_type",
-                        Value::String(serialized_payload.content_type.to_string()),
-                        Some(format!(
-                            "Content type '{}' of telemetry message type is not valid UTF-8",
-                            serialized_payload.content_type
-                        )),
-                        None,
-                    ));
+                        true,
+                        //message: "Content type of telemetry message type is not valid UTF-8".to_string()
+                    ))
                 }
                 self.serialized_payload = Some(serialized_payload);
                 self.message_payload_type = Some(PhantomData);
@@ -359,10 +357,10 @@ where
         application_context: ApplicationContext,
         client: C,
         sender_options: TelemetrySenderOptions,
-    ) -> Result<Self, AIOProtocolError> {
+    ) -> Result<Self, TelemetryError> {
         // Validate parameters
         let topic_pattern = TopicPattern::new(
-            "sender_options.topic_pattern",
+            //"sender_options.topic_pattern",
             &sender_options.topic_pattern,
             None,
             sender_options.topic_namespace.as_deref(),

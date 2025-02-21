@@ -3,6 +3,8 @@
 
 use std::time::Duration;
 
+use crate::common::topic_processor::{TopicPattern, TopicPatternError};
+
 /// An error that occurred during a Telemetry operation
 #[derive(Debug)]
 pub struct TelemetryError {
@@ -12,6 +14,12 @@ pub struct TelemetryError {
     source: Option<Box<dyn std::error::Error>>,
     /// Indicates whether the error was detected prior to attempted network communication
     is_shallow: bool,
+}
+
+impl TelemetryError {
+    pub fn new(kind: TelemetryErrorKind, source: Option<Box<dyn std::error::Error>>, is_shallow: bool) -> Self {
+        Self { kind, source, is_shallow }
+    }
 }
 
 // TODO: should these impl a Protocol Error trait so Telemetry and Command have same interface?
@@ -40,50 +48,75 @@ impl std::error::Error for TelemetryError {
     }
 }
 
+impl From<TopicPatternError> for TelemetryError {
+
+}
+
 /// The kind of Telemetry error
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum TelemetryErrorKind {
     /// A required MQTT header property is missing from a received message  //TODO: received only???
-    HeaderMissing { header_name: String },
+    HeaderMissing { 
+        pub header_name: String
+    },
     /// An MQTT header property has an invalid value        // TODO: can we remove MQTT information?
     HeaderInvalid {
-        header_name: String,
-        header_value: String,
+        pub header_name: String,
+        pub header_value: String,
     },
     /// Payload cannot be serialized/deserialized
     PayloadInvalid,
     /// An operation was aborted due to timeout
     Timeout {
-        timeout_name: String,
-        timeout_value: Duration,
+        pub timeout_name: String,
+        pub timeout_value: Duration,
     },
     /// An operation was cancelled
     Cancellation,
     /// A field, configuration file, or environment variable has an invalid value
     ConfigurationInvalid {
-        property_name: String,
-        property_value: Value,
+        pub property_name: String,
+        pub property_value: Value,
     },
     /// An invalid argument was provided to a function or method
     ArgumentInvalid {
-        property_name: String,
-        property_value: Value,
+        pub property_name: String,
+        pub property_value: Value,
     },
-    /// The current program state is invalid vis!vis the function or method that was called
+    /// The current program state is invalid vis-a-vis the function or method that was called
     StateInvalid {
-        property_name: String,
-        property_value: Option<Value>,
+        pub property_name: String,
+        pub property_value: Option<Value>,
     },
     /// The client or service observed a condition that was thought to be impossible
     InternalLogicError {
-        property_name: String,
-        property_value: Option<Value>,
+        pub property_name: String,
+        pub property_value: Option<Value>,
     },
     /// The client or service received an unexpected error from a dependent component
     UnknownError,
     /// The network communication encountered an error and failed
     ClientError,
 }
+
+// impl TelemetryErrorKind {
+//     pub(crate) fn as_str(&self) -> &'static str {
+//         match *self {
+//             TelemetryErrorKind::HeaderMissing { .. } => "HeaderMissing",
+//             TelemetryErrorKind::HeaderInvalid { .. } => "HeaderInvalid",
+//             TelemetryErrorKind::PayloadInvalid => "PayloadInvalid",
+//             TelemetryErrorKind::Timeout { .. } => "Timeout",
+//             TelemetryErrorKind::Cancellation => "Cancellation",
+//             TelemetryErrorKind::ConfigurationInvalid { .. } => "ConfigurationInvalid",
+//             TelemetryErrorKind::ArgumentInvalid { .. } => "ArgumentInvalid",
+//             TelemetryErrorKind::StateInvalid { .. } => "StateInvalid",
+//             TelemetryErrorKind::InternalLogicError { .. } => "InternalLogicError",
+//             TelemetryErrorKind::UnknownError => "UnknownError",
+//             TelemetryErrorKind::ClientError => "ClientError",
+//         }
+//     }
+// }
 
 /// Represents the possible types of the value of a property
 #[derive(Debug, PartialEq)]
