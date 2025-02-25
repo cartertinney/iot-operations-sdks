@@ -9,7 +9,7 @@ use std::{collections::HashMap, marker::PhantomData, time::Duration};
 use azure_iot_operations_mqtt::control_packet::{PublishProperties, QoS};
 use azure_iot_operations_mqtt::interface::ManagedClient;
 use bytes::Bytes;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, SecondsFormat, Utc};
 use uuid::Uuid;
 
 use crate::{
@@ -24,9 +24,6 @@ use crate::{
     telemetry::{
         cloud_event::{
             CloudEventFields, DEFAULT_CLOUD_EVENT_EVENT_TYPE, DEFAULT_CLOUD_EVENT_SPEC_VERSION,
-        },
-        error:: {
-            TelemetryError, TelemetryErrorKind,
         },
         TELEMETRY_PROTOCOL_VERSION,
     },
@@ -147,7 +144,10 @@ impl CloudEvent {
             CloudEventSubject::None => {}
         }
         if let Some(time) = self.time {
-            headers.push((CloudEventFields::Time.to_string(), time.to_rfc3339()));
+            headers.push((
+                CloudEventFields::Time.to_string(),
+                time.to_rfc3339_opts(SecondsFormat::Secs, true),
+            ));
         }
         if let Some(data_schema) = self.data_schema {
             headers.push((
@@ -194,27 +194,32 @@ impl<T: PayloadSerialize> TelemetryMessageBuilder<T> {
     /// Add a payload to the telemetry message. Validates successful serialization of the payload.
     ///
     /// # Errors
-    /// [`TelemetryError`] of kind [`PayloadInvalid`](crate::telemetry::error::TelemetryErrorKind::PayloadInvalid) if serialization of the payload fails
+    /// [`AIOProtocolError`] of kind [`PayloadInvalid`](crate::common::aio_protocol_error::AIOProtocolErrorKind::PayloadInvalid) if serialization of the payload fails
     ///
-    /// [`TelemetryError`] of kind [`ConfigurationInvalid`](crate::telemetry::error::TelemetryErrorKind::ConfigurationInvalid) if the content type is not valid utf-8
-    pub fn payload(&mut self, payload: T) -> Result<&mut Self, TelemetryError> {
+    /// [`AIOProtocolError`] of kind [`ConfigurationInvalid`](crate::common::aio_protocol_error::AIOProtocolErrorKind::ConfigurationInvalid) if the content type is not valid utf-8
+    pub fn payload(&mut self, payload: T) -> Result<&mut Self, AIOProtocolError> {
         match payload.serialize() {
-            Err(e) => Err(TelemetryError::new(
-                TelemetryErrorKind::PayloadInvalid,
-                Some(e.into()),
+            Err(e) => Err(AIOProtocolError::new_payload_invalid_error(
                 true,
-                //message: "Payload serialization error".to_string()
+                false,
+                Some(e.into()),
+                None,
+                Some("Payload serialization error".to_string()),
+                None,
             )),
-
             Ok(serialized_payload) => {
                 // Validate content type of telemetry message is valid UTF-8
                 if is_invalid_utf8(&serialized_payload.content_type) {
-                    return Err(TelemetryError::new(
-                        TelemetryErrorKind::ConfigurationInvalid,
+                    return Err(AIOProtocolError::new_configuration_invalid_error(
                         None,
-                        true,
-                        //message: "Content type of telemetry message type is not valid UTF-8".to_string()
-                    ))
+                        "content_type",
+                        Value::String(serialized_payload.content_type.to_string()),
+                        Some(format!(
+                            "Content type '{}' of telemetry message type is not valid UTF-8",
+                            serialized_payload.content_type
+                        )),
+                        None,
+                    ));
                 }
                 self.serialized_payload = Some(serialized_payload);
                 self.message_payload_type = Some(PhantomData);
@@ -357,15 +362,14 @@ where
         application_context: ApplicationContext,
         client: C,
         sender_options: TelemetrySenderOptions,
-    ) -> Result<Self, TelemetryError> {
+    ) -> Result<Self, AIOProtocolError> {
         // Validate parameters
         let topic_pattern = TopicPattern::new(
-            //"sender_options.topic_pattern",
             &sender_options.topic_pattern,
             None,
             sender_options.topic_namespace.as_deref(),
             &sender_options.topic_token_map,
-        )?;
+        ).map_err(|e| AIOProtocolError::from_topic_pattern_error(e, "sender_options.topic_pattern"))?;
 
         Ok(Self {
             application_hlc: application_context.application_hlc,

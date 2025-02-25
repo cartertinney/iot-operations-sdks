@@ -11,47 +11,27 @@ use super::aio_protocol_error::{AIOProtocolError, Value};
 pub const WILDCARD: &str = "+";
 
 
-// #[derive(thiserror::Error, Debug)]
-// pub(crate) enum TopicPatternError {
-//     #[error("Topic pattern contains empty levels")]
-//     EmptyLevel,
-//     #[error("Topic pattern starts with reserved character: {0}")]
-//     StartsWithReservedChar(char),       // TODO: should this be more specific?
-//     #[error("Share name is invalid: {0}")]
-//     InvalidShareName(String),
-//     #[error("Invalid topic namespace: {0}")]
-//     InvalidTopicNamespace(String),
-//     #[error("Topic pattern contains invalid characters")]
-//     InvalidCharacters,
-//     #[error("Topic pattern contains invalid characters in token '{0}'")]
-//     InvalidTokenCharacters(String),
-//     #[error("Topic pattern contains empty token")]
-//     EmptyToken,
-//     #[error("Topic pattern contains token '{0}', but replacement value '{1}' is not valid")]
-//     InvalidTokenReplacement(String, String),
-//     #[error("Topic pattern contains adjacent tokens")]
-//     AdjacentTokens,
-// }
-
 #[derive(thiserror::Error, Debug)]
-#[error("{kind} - {msg}")]
-pub(crate) struct TopicPatternError {
-    msg: String,
-    kind: TopicPatternErrorKind,
-}
-
-#[derive(thiserror::Error, Debug)]
-pub (crate) enum TopicPatternErrorKind {
-    #[error("Topic pattern is invalid")]
-    InvalidPattern,
-    #[error("Share name '{0}' is invalid")]
+pub(crate) enum TopicPatternError {
+    #[error("Topic pattern contains empty levels")]
+    EmptyLevel,
+    #[error("Topic pattern starts with reserved character: {0}")]
+    StartsWithReservedChar(char),       // TODO: should this be more specific?
+    #[error("Share name is invalid: {0}")]
     InvalidShareName(String),
-    #[error("Topic namespace '{0}' is invalid")]
-    InvalidNamespace(String),
-    #[error("Token '{0}' replacement value '{1}' is invalid")]
+    #[error("Invalid topic namespace: {0}")]
+    InvalidTopicNamespace(String),
+    #[error("Topic pattern contains invalid characters")]
+    InvalidCharacters,
+    #[error("Topic pattern contains invalid characters in token '{0}'")]
+    InvalidTokenCharacters(String),
+    #[error("Topic pattern contains empty token")]
+    EmptyToken,
+    #[error("Topic pattern contains token '{0}', but replacement value '{1}' is not valid")]
     InvalidTokenReplacement(String, String),
+    #[error("Topic pattern contains adjacent tokens")]
+    AdjacentTokens,
 }
-
 
 /// Check if a string contains invalid characters specified in [topic-structure.md](https://github.com/Azure/iot-operations-sdks/blob/main/doc/reference/topic-structure.md)
 ///
@@ -127,17 +107,11 @@ impl TopicPattern {
         topic_token_map: &'a HashMap<String, String>,
     ) -> Result<Self, TopicPatternError> {
         if pattern.trim().is_empty() {
-            return Err(TopicPatternError {
-                msg: "Pattern is empty".to_string(),
-                kind: TopicPatternErrorKind::InvalidPattern,
-            });
+            return Err(TopicPatternError::EmptyLevel)
         }
 
         if pattern.starts_with('$') {
-            return Err(TopicPatternError {
-                msg: "'$' is a reserved character".to_string(),
-                kind: TopicPatternErrorKind::InvalidPattern,
-            });
+            return Err(TopicPatternError::StartsWithReservedChar('$'))
         }
 
         if let Some(share_name) = &share_name {
@@ -145,11 +119,7 @@ impl TopicPattern {
                 || contains_invalid_char(share_name)
                 || share_name.contains('/')
             {
-                return Err(TopicPatternError {
-                    msg: format!("Share name '{}' is invalid", share_name),
-                    kind: TopicPatternErrorKind::InvalidShareName(share_name.to_string()),
-                })
-                //return Err(TopicPatternError::InvalidShareName(share_name.to_string()));
+                return Err(TopicPatternError::InvalidShareName(share_name.to_string()));
             }
         }
 

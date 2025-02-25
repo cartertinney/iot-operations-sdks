@@ -327,20 +327,18 @@ where
 
         // Generate the request and response topics
         let request_topic_pattern = TopicPattern::new(
-            "invoker_options.request_topic_pattern",
             &invoker_options.request_topic_pattern,
             None,
             invoker_options.topic_namespace.as_deref(),
             &invoker_options.topic_token_map,
-        )?;
+        ).map_err(|e| AIOProtocolError::from_topic_pattern_error(e, "invoker_options.request_topic_pattern"))?;
 
         let response_topic_pattern = TopicPattern::new(
-            "response_topic_pattern",
             &response_topic_pattern,
             None,
             invoker_options.topic_namespace.as_deref(),
             &invoker_options.topic_token_map,
-        )?;
+        ).map_err(|e| AIOProtocolError::from_topic_pattern_error(e, "response_topic_pattern"))?;
 
         // Create mutex to track invoker state
         let invoker_state_mutex = Arc::new(Mutex::new(CommandInvokerState::New));

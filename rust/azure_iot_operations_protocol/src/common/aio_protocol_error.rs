@@ -5,7 +5,7 @@ use std::error::Error;
 use std::fmt;
 use std::time::Duration;
 
-use crate::common::topic_processor::TopicPatternError;
+use crate::common::topic_processor::{TopicPatternError, TopicPatternErrorKind};
 
 /// Represents the kind of error that occurs in an Azure IoT Operations Protocol
 #[derive(Debug, PartialEq)]
@@ -202,75 +202,52 @@ impl Error for AIOProtocolError {
 }
 
 impl AIOProtocolError {
-
-    // TODO: set error as nested error?
-
-    pub fn from_topic_pattern_error(error: TopicPatternError, pattern_var_name: &str, pattern: &str) -> AIOProtocolError {
+    pub fn from_topic_pattern_error(error: TopicPatternError, pattern_var_name: &str) -> AIOProtocolError {
+        // NOTE: There is some inefficiency here with string allocations.
+        // This will be sorted out when AIOProtocolError is replaced in the near future.
         let err_msg = format!("{error}");
-        match error {
-            TopicPatternError::EmptyLevel => AIOProtocolError::new_configuration_invalid_error(
-                None,
-                pattern_var_name,
-                Value::String(pattern.to_string()),
-                Some(err_msg),
-                None,
-            ),
-            TopicPatternError::StartsWithReservedChar(_) => AIOProtocolError::new_configuration_invalid_error(
-                None,
-                pattern_var_name,
-                Value::String(pattern.to_string()),
-                Some(err_msg),
-                None,
-            ),
-            TopicPatternError::InvalidShareName(share_name) => AIOProtocolError::new_configuration_invalid_error(
-                None,
-                "share_name",
-                Value::String(share_name),
-                Some(err_msg),
-                None,
-            ),
-            TopicPatternError::InvalidTopicNamespace(namespace) => AIOProtocolError::new_configuration_invalid_error(
-                None,
-                "topic_namespace",
-                Value::String(namespace),
-                Some(err_msg),
-                None,
-            ),
-            TopicPatternError::InvalidCharacters => AIOProtocolError::new_configuration_invalid_error(
-                None,
-                pattern_var_name,
-                Value::String(pattern.to_string()),
-                Some(err_msg),
-                None,
-            ),
-            TopicPatternError::InvalidTokenCharacters(token) => AIOProtocolError::new_configuration_invalid_error(
-                None,
-                pattern_var_name,
-                Value::String(pattern.to_string()),
-                Some(err_msg),
-                None,
-            ),
-            TopicPatternError::EmptyToken => AIOProtocolError::new_configuration_invalid_error(
-                None,
-                pattern_var_name,
-                Value::String(pattern.to_string()),
-                Some(err_msg),
-                None,
-            ),
-            TopicPatternError::InvalidTokenReplacement(token, replacement) => AIOProtocolError::new_configuration_invalid_error(
-                None,
-                &token,
-                Value::String(replacement.to_string()),
-                Some(err_msg),
-                None,
-            ),
-            TopicPatternError::AdjacentTokens => AIOProtocolError::new_configuration_invalid_error(
-                None,
-                pattern_var_name,
-                Value::String(pattern.to_string()),
-                Some(err_msg),
-                None,
-            ),
+        match error.kind() {
+            TopicPatternErrorKind::InvalidPattern(pattern) => {
+                let pattern = pattern.to_string();
+                AIOProtocolError::new_configuration_invalid_error(
+                    Some(Box::new(error)),
+                    pattern_var_name,
+                    Value::String(pattern),
+                    Some(err_msg),
+                    None,
+                )
+            },
+            TopicPatternErrorKind::InvalidShareName(share_name) => {
+                let share_name = share_name.to_string();
+                AIOProtocolError::new_configuration_invalid_error(
+                    Some(Box::new(error)),
+                    "share_name",
+                    Value::String(share_name),
+                    Some(err_msg),
+                    None,
+                )
+            },
+            TopicPatternErrorKind::InvalidNamespace(namespace) => {
+                let namespace = namespace.to_string();
+                AIOProtocolError::new_configuration_invalid_error(
+                    Some(Box::new(error)),
+                    "topic_namespace",
+                    Value::String(namespace),
+                    Some(err_msg),
+                    None,
+                )
+            },
+            TopicPatternErrorKind::InvalidTokenReplacement(token, replacement) => {
+                let token = token.clone();
+                let replacement = replacement.to_string();
+                AIOProtocolError::new_configuration_invalid_error(
+                    Some(Box::new(error)),
+                    &token,
+                    Value::String(replacement.to_string()),
+                    Some(err_msg),
+                    None,
+                )
+            },
         }
 
     }

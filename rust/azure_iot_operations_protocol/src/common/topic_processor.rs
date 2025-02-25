@@ -11,27 +11,48 @@ use super::aio_protocol_error::{AIOProtocolError, Value};
 pub const WILDCARD: &str = "+";
 
 
+// NOTE: This error design is less than ideal as detailed messages are only provided for the
+// InvalidPattern kind. This is because the other error kinds have logic that validates many
+// things at once, thus not allowing an easy way to report granular detail without reworking
+// substantial structure and organization of this module.
+// It has been suggested that namespaces and share names should be validated
+// separately before being provided to the constructor as well, as they are distinct from the
+// pattern, and having a TopicPatternError for something that is not a topic pattern is
+// semantically strange, which may help in improving error implementation here.
+
 #[derive(thiserror::Error, Debug)]
-pub(crate) enum TopicPatternError {
-    #[error("Topic pattern contains empty levels")]
-    EmptyLevel,
-    #[error("Topic pattern starts with reserved character: {0}")]
-    StartsWithReservedChar(char),       // TODO: should this be more specific?
-    #[error("Share name is invalid: {0}")]
-    InvalidShareName(String),
-    #[error("Invalid topic namespace: {0}")]
-    InvalidTopicNamespace(String),
-    #[error("Topic pattern contains invalid characters")]
-    InvalidCharacters,
-    #[error("Topic pattern contains invalid characters in token '{0}'")]
-    InvalidTokenCharacters(String),
-    #[error("Topic pattern contains empty token")]
-    EmptyToken,
-    #[error("Topic pattern contains token '{0}', but replacement value '{1}' is not valid")]
-    InvalidTokenReplacement(String, String),
-    #[error("Topic pattern contains adjacent tokens")]
-    AdjacentTokens,
+pub(crate) struct TopicPatternError {
+    msg: Option<String>,
+    kind: TopicPatternErrorKind,
 }
+
+impl TopicPatternError {
+    pub fn kind(&self) -> &TopicPatternErrorKind {
+        &self.kind
+    }
+}
+
+impl std::fmt::Display for TopicPatternError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(msg) = &self.msg {
+            write!(f, "{} - {}", self.kind, msg)?;
+        }
+        write!(f, "{}", self.kind)
+    }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub (crate) enum TopicPatternErrorKind {
+    #[error("Topic pattern is invalid")]
+    InvalidPattern(String),
+    #[error("Share name '{0}' is invalid")]
+    InvalidShareName(String),
+    #[error("Topic namespace '{0}' is invalid")]
+    InvalidNamespace(String),
+    #[error("Token '{0}' replacement value '{1}' is invalid")]
+    InvalidTokenReplacement(String, String),
+}
+
 
 /// Check if a string contains invalid characters specified in [topic-structure.md](https://github.com/Azure/iot-operations-sdks/blob/main/doc/reference/topic-structure.md)
 ///
@@ -107,11 +128,17 @@ impl TopicPattern {
         topic_token_map: &'a HashMap<String, String>,
     ) -> Result<Self, TopicPatternError> {
         if pattern.trim().is_empty() {
-            return Err(TopicPatternError::EmptyLevel)
+            return Err(TopicPatternError {
+                msg: Some("Pattern is empty".to_string()),
+                kind: TopicPatternErrorKind::InvalidPattern(pattern.to_string()),
+            });
         }
 
         if pattern.starts_with('$') {
-            return Err(TopicPatternError::StartsWithReservedChar('$'))
+            return Err(TopicPatternError {
+                msg: Some("'$' is a reserved character".to_string()),
+                kind: TopicPatternErrorKind::InvalidPattern(pattern.to_string()),
+            });
         }
 
         if let Some(share_name) = &share_name {
@@ -119,7 +146,10 @@ impl TopicPattern {
                 || contains_invalid_char(share_name)
                 || share_name.contains('/')
             {
-                return Err(TopicPatternError::InvalidShareName(share_name.to_string()));
+                return Err(TopicPatternError {
+                    msg: None,
+                    kind: TopicPatternErrorKind::InvalidShareName(share_name.to_string()),
+                })
             }
         }
 
@@ -128,7 +158,10 @@ impl TopicPattern {
             Regex::new(r"((^\s*/)|(/\s*/)|(/\s*$))").expect("Static regex string should not fail");
 
         if empty_level_regex.is_match(pattern) {
-            return Err(TopicPatternError::EmptyLevel);
+            return Err(TopicPatternError {
+                msg: Some("Contains empty level(s)".to_string()),
+                kind: TopicPatternErrorKind::InvalidPattern(pattern.to_string()),
+            });
         }
 
         // Used to accumulate the pattern as checks and replacements are made
@@ -136,7 +169,10 @@ impl TopicPattern {
 
         if let Some(topic_namespace) = topic_namespace {
             if !is_valid_replacement(topic_namespace) {
-                return Err(TopicPatternError::InvalidTopicNamespace(topic_namespace.to_string()));
+                return Err(TopicPatternError {
+                    msg: None,
+                    kind: TopicPatternErrorKind::InvalidNamespace(topic_namespace.to_string()),
+                })
             }
             acc_pattern.push_str(topic_namespace);
             acc_pattern.push('/');
@@ -160,11 +196,17 @@ impl TopicPattern {
             let token_without_braces = &token_with_braces[1..token_with_braces.len() - 1];
 
             if token_without_braces.trim().is_empty() {
-                return Err(TopicPatternError::EmptyToken);
+                return Err(TopicPatternError {
+                    msg: Some("Contains empty token".to_string()),
+                    kind: TopicPatternErrorKind::InvalidPattern(pattern.to_string()),
+                })
             }
 
             if last_end_index != 0 && last_end_index == token_capture.start() {
-                return Err(TopicPatternError::AdjacentTokens);
+                return Err(TopicPatternError {
+                    msg: Some("Contains adjacent tokens".to_string()),
+                    kind: TopicPatternErrorKind::InvalidPattern(pattern.to_string()),
+                })
             }
 
             last_end_index = token_capture.end();
@@ -173,20 +215,29 @@ impl TopicPattern {
 
             // Check if the accumulated part of the pattern is valid
             if invalid_regex.is_match(acc) {
-                return Err(TopicPatternError::InvalidCharacters);
+                return Err(TopicPatternError {
+                    msg: Some("Contains invalid characters".to_string()),
+                    kind: TopicPatternErrorKind::InvalidPattern(pattern.to_string()),
+                })
             }
 
             acc_pattern.push_str(acc);
 
             // Check if the token is valid
             if invalid_regex.is_match(token_without_braces) || token_without_braces.contains('/') {
-                return Err(TopicPatternError::InvalidTokenCharacters(token_without_braces.to_string()));
+                return Err(TopicPatternError {
+                    msg: Some(format!("Contains invalid characters in token {token_without_braces}")),
+                    kind: TopicPatternErrorKind::InvalidPattern(pattern.to_string()),
+                })
             }
 
             // Check if the replacement is valid
             if let Some(val) = topic_token_map.get(token_without_braces) {
                 if !is_valid_replacement(val) {
-                    return Err(TopicPatternError::InvalidTokenReplacement(token_without_braces.to_string(), val.to_string()));
+                    return Err(TopicPatternError {
+                        msg: None,
+                        kind: TopicPatternErrorKind::InvalidTokenReplacement(token_without_braces.to_string(), val.to_string()),
+                    });
                 }
                 acc_pattern.push_str(val);
             } else {
@@ -199,7 +250,10 @@ impl TopicPattern {
         // Check the last part of the pattern
         let acc = &pattern[last_match..];
         if invalid_regex.is_match(acc) {
-            return Err(TopicPatternError::InvalidCharacters);
+            return Err(TopicPatternError {
+                msg: Some("Contains invalid characters".to_string()),
+                kind: TopicPatternErrorKind::InvalidPattern(pattern.to_string()),
+            })
         }
 
         acc_pattern.push_str(acc);
