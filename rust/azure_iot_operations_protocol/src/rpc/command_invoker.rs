@@ -31,7 +31,6 @@ use crate::{
     },
     parse_supported_protocol_major_versions,
     rpc::{
-        error::{RPCError, RPCErrorKind, Value},
         StatusCode, DEFAULT_RPC_PROTOCOL_VERSION, RPC_PROTOCOL_VERSION
     },
     ProtocolVersion,
@@ -64,7 +63,6 @@ where
     /// Timeout for the command. Will also be used as the `message_expiry_interval` to give the executor information on when the invoke request might expire.
     timeout: Duration,
 }
-
 impl<TReq: PayloadSerialize> CommandRequestBuilder<TReq> {
     /// Add a payload to the command request. Validates successful serialization of the payload.
     ///
@@ -72,42 +70,29 @@ impl<TReq: PayloadSerialize> CommandRequestBuilder<TReq> {
     /// [`AIOProtocolError`] of kind [`PayloadInvalid`](crate::common::aio_protocol_error::AIOProtocolErrorKind::PayloadInvalid) if serialization of the payload fails
     ///
     /// [`AIOProtocolError`] of kind [`ConfigurationInvalid`](crate::common::aio_protocol_error::AIOProtocolErrorKind::ConfigurationInvalid) if the content type is not valid utf-8
-    pub fn payload(&mut self, payload: TReq) -> Result<&mut Self, RPCError> {
+    pub fn payload(&mut self, payload: TReq) -> Result<&mut Self, AIOProtocolError> {
         match payload.serialize() {
-            Err(e) => Err(RPCError {
-                kind: RPCErrorKind::PayloadInvalid,
-                source: Some(Box::new(e)),
-                is_shallow: true,
-                command_name: None,
-                //message: "Payload serialization error".to_string()
-            }
+            Err(e) => Err(AIOProtocolError::new_payload_invalid_error(
+                true,
+                false,
+                Some(e.into()),
+                None,
+                Some("Payload serialization error".to_string()),
+                None,
+            )),
             Ok(serialized_payload) => {
                 // Validate content type of command request is valid UTF-8
                 if is_invalid_utf8(&serialized_payload.content_type) {
-                    return Err(RPCError {
-                        kind: RPCErrorKind::ConfigurationInvalid {
-                            header_name: "content_type".to_string(),
-                            header_value: serialized_payload.content_type.to_string(),
-                        }
-                        source: None,
-                        is_shallow: true,
-                        command_name: None,
-                        //message: format!(
-                        //         "Content type '{}' of command request is not valid UTF-8",
-                        //         serialized_payload.content_type
-                        //     )
-                    })
-
-                    // return Err(AIOProtocolError::new_configuration_invalid_error(
-                    //     None,
-                    //     "content_type",
-                    //     Value::String(serialized_payload.content_type.to_string()),
-                    //     Some(format!(
-                    //         "Content type '{}' of command request is not valid UTF-8",
-                    //         serialized_payload.content_type
-                    //     )),
-                    //     None,
-                    // ));
+                    return Err(AIOProtocolError::new_configuration_invalid_error(
+                        None,
+                        "content_type",
+                        Value::String(serialized_payload.content_type.to_string()),
+                        Some(format!(
+                            "Content type '{}' of command request is not valid UTF-8",
+                            serialized_payload.content_type
+                        )),
+                        None,
+                    ));
                 }
                 self.serialized_payload = Some(serialized_payload);
                 self.request_payload_type = Some(PhantomData);

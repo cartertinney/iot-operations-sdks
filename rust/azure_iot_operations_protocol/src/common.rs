@@ -14,6 +14,7 @@ pub mod aio_protocol_error;
 
 /// This module contains the topic processor functions for the Azure IoT Operations Protocol
 pub mod topic_processor;
+pub mod topic_processor2;
 
 /// This module contains string values for Azure IoT Operations Protocol defined user properties.
 pub mod user_properties;

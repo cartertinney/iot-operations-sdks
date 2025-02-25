@@ -5,6 +5,8 @@ use std::error::Error;
 use std::fmt;
 use std::time::Duration;
 
+use crate::common::topic_processor::TopicPatternError;
+
 /// Represents the kind of error that occurs in an Azure IoT Operations Protocol
 #[derive(Debug, PartialEq)]
 pub enum AIOProtocolErrorKind {
@@ -200,6 +202,80 @@ impl Error for AIOProtocolError {
 }
 
 impl AIOProtocolError {
+
+    // TODO: set error as nested error?
+
+    pub fn from_topic_pattern_error(error: TopicPatternError, pattern_var_name: &str, pattern: &str) -> AIOProtocolError {
+        let err_msg = format!("{error}");
+        match error {
+            TopicPatternError::EmptyLevel => AIOProtocolError::new_configuration_invalid_error(
+                None,
+                pattern_var_name,
+                Value::String(pattern.to_string()),
+                Some(err_msg),
+                None,
+            ),
+            TopicPatternError::StartsWithReservedChar(_) => AIOProtocolError::new_configuration_invalid_error(
+                None,
+                pattern_var_name,
+                Value::String(pattern.to_string()),
+                Some(err_msg),
+                None,
+            ),
+            TopicPatternError::InvalidShareName(share_name) => AIOProtocolError::new_configuration_invalid_error(
+                None,
+                "share_name",
+                Value::String(share_name),
+                Some(err_msg),
+                None,
+            ),
+            TopicPatternError::InvalidTopicNamespace(namespace) => AIOProtocolError::new_configuration_invalid_error(
+                None,
+                "topic_namespace",
+                Value::String(namespace),
+                Some(err_msg),
+                None,
+            ),
+            TopicPatternError::InvalidCharacters => AIOProtocolError::new_configuration_invalid_error(
+                None,
+                pattern_var_name,
+                Value::String(pattern.to_string()),
+                Some(err_msg),
+                None,
+            ),
+            TopicPatternError::InvalidTokenCharacters(token) => AIOProtocolError::new_configuration_invalid_error(
+                None,
+                pattern_var_name,
+                Value::String(pattern.to_string()),
+                Some(err_msg),
+                None,
+            ),
+            TopicPatternError::EmptyToken => AIOProtocolError::new_configuration_invalid_error(
+                None,
+                pattern_var_name,
+                Value::String(pattern.to_string()),
+                Some(err_msg),
+                None,
+            ),
+            TopicPatternError::InvalidTokenReplacement(token, replacement) => AIOProtocolError::new_configuration_invalid_error(
+                None,
+                &token,
+                Value::String(replacement.to_string()),
+                Some(err_msg),
+                None,
+            ),
+            TopicPatternError::AdjacentTokens => AIOProtocolError::new_configuration_invalid_error(
+                None,
+                pattern_var_name,
+                Value::String(pattern.to_string()),
+                Some(err_msg),
+                None,
+            ),
+        }
+
+    }
+
+
     /// Creates a new [`AIOProtocolError`] for a missing MQTT header
     #[must_use]
     pub fn new_header_missing_error(
@@ -676,3 +752,16 @@ impl AIOProtocolError {
         }
     }
 }
+
+
+// impl From<TopicPatternError> for AIOProtocolError {
+//     fn from(error: TopicPatternError) -> Self {
+//         AIOProtocolError::new_configuration_invalid_error(
+//             None,
+//             "topic_pattern",
+//             Value::String(error.to_string()),
+//             None,
+//             None,
+//         )
+//     }
+// }

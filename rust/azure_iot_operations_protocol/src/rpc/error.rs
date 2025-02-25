@@ -138,7 +138,6 @@ pub enum Value {
     Boolean(bool),
 }
 
-
 /// Represents an error reported by a remote executor
 #[derive(thiserror::Error, Debug)]
 #[error("Remote Error status code: {http_status_code:?}")]
