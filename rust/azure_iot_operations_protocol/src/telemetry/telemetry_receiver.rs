@@ -216,7 +216,7 @@ pub struct TelemetryMessage<T: PayloadSerialize> {
     pub sender_id: Option<String>,
     /// Timestamp of the telemetry message.
     pub timestamp: Option<HybridLogicalClock>,
-    /// Resolved topic tokens from the incoming message's topic.
+    /// Resolved static and dynamic topic tokens from the incoming message's topic.
     pub topic_tokens: HashMap<String, String>,
 }
 
@@ -331,7 +331,13 @@ where
             None,
             receiver_options.topic_namespace.as_deref(),
             &receiver_options.topic_token_map,
-        ).map_err(|e| AIOProtocolError::from_topic_pattern_error(e, "receiver_options.topic_pattern"))?;
+        )
+        .map_err(|e| {
+            AIOProtocolError::config_invalid_from_topic_pattern_error(
+                e,
+                "receiver_options.topic_pattern",
+            )
+        })?;
 
         // Get the telemetry topic
         let telemetry_topic = topic_pattern.as_subscribe_topic();
