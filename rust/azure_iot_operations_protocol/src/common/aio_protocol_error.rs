@@ -755,7 +755,6 @@ impl AIOProtocolError {
     }
 }
 
-
 // impl From<TopicPatternError> for AIOProtocolError {
 //     fn from(error: TopicPatternError) -> Self {
 //         AIOProtocolError::new_configuration_invalid_error(

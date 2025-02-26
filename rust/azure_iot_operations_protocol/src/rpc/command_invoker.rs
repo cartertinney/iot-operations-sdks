@@ -30,9 +30,7 @@ use crate::{
         user_properties::UserProperty,
     },
     parse_supported_protocol_major_versions,
-    rpc::{
-        StatusCode, DEFAULT_RPC_PROTOCOL_VERSION, RPC_PROTOCOL_VERSION
-    },
+    rpc::{StatusCode, DEFAULT_RPC_PROTOCOL_VERSION, RPC_PROTOCOL_VERSION},
     ProtocolVersion,
 };
 

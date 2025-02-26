@@ -57,7 +57,7 @@
 // #[non_exhaustive]
 // pub enum TelemetryErrorKind {
 //     /// A required MQTT header property is missing from a received message  //TODO: received only???
-//     HeaderMissing { 
+//     HeaderMissing {
 //         pub header_name: String
 //     },
 //     /// An MQTT header property has an invalid value        // TODO: can we remove MQTT information?
