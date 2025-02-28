@@ -1,4 +1,4 @@
-name: CI-dotnet
+name: CI-Dotnet
 
 on:
   workflow_dispatch:
@@ -35,27 +35,16 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+
+    - name: Install AIO
+      uses: ./.github/actions/deploy-aio
       with:
-        fetch-depth: 0
-    
-    - name: Setup .NET 8
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: 8.0.301
-    
-    - name: Setup .NET 9
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: 9.0.200
-    
+        wait-for-broker: 'true'
+        install-dotnet: 'true'
+
     - name: dotnet info
       run: dotnet --info
 
-    - name: Setup Cluster
-      run: |
-        tools/deployment/initialize-cluster.sh
-        tools/deployment/deploy-aio.sh nightly
-        
     - name: Install Protoc
       uses: arduino/setup-protoc@v3
 
