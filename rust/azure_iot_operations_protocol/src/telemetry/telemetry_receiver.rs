@@ -12,13 +12,14 @@ use tokio_util::sync::CancellationToken;
 use crate::{
     application::{ApplicationContext, ApplicationHybridLogicalClock},
     common::{
-        aio_protocol_error::{AIOProtocolError, Value},
+        //aio_protocol_error::{AIOProtocolError, Value},
         hybrid_logical_clock::HybridLogicalClock,
         payload_serialize::{FormatIndicator, PayloadSerialize},
-        topic_processor::TopicPattern,
+        topic_processor::{TopicPattern, TopicPatternErrorKind},
         user_properties::UserProperty,
     },
     telemetry::{
+        error::{TelemetryError, TelemetryErrorKind, Value},
         cloud_event::{CloudEventFields, DEFAULT_CLOUD_EVENT_SPEC_VERSION},
         DEFAULT_TELEMETRY_PROTOCOL_VERSION,
     },
@@ -323,7 +324,7 @@ where
         application_context: ApplicationContext,
         client: C,
         receiver_options: TelemetryReceiverOptions,
-    ) -> Result<Self, AIOProtocolError> {
+    ) -> Result<Self, TelemetryError> {
         // Validation for topic pattern and related options done in
         // [`TopicPattern::new`]
         let topic_pattern = TopicPattern::new(
@@ -333,9 +334,31 @@ where
             &receiver_options.topic_token_map,
         )
         .map_err(|e| {
-            AIOProtocolError::config_invalid_from_topic_pattern_error(
+            let (property_name, property_value) = match e.kind() {
+                TopicPatternErrorKind::InvalidPattern(pattern) => (
+                    "receiver_options.topic_pattern".to_string(),
+                    Value::String(pattern.to_string()),
+                ),
+                TopicPatternErrorKind::InvalidShareName(share_name) => (
+                    "share_name".to_string(),
+                    Value::String(share_name.to_string()),
+                ),
+                TopicPatternErrorKind::InvalidNamespace(namespace) => (
+                    "topic_namespace".to_string(),
+                    Value::String(namespace.to_string()),
+                ),
+                TopicPatternErrorKind::InvalidTokenReplacement(token, replacement) => (
+                    token.to_string(),
+                    Value::String(replacement.to_string()),
+                ),
+            };
+            TelemetryError::new(
+                TelemetryErrorKind::ConfigurationInvalid {
+                    property_name,
+                    property_value,
+                },
                 e,
-                "receiver_options.topic_pattern",
+                true,
             )
         })?;
 
@@ -345,12 +368,13 @@ where
         let mqtt_receiver = match client.create_filtered_pub_receiver(&telemetry_topic) {
             Ok(receiver) => receiver,
             Err(e) => {
-                return Err(AIOProtocolError::new_configuration_invalid_error(
-                    Some(Box::new(e)),
-                    "topic_pattern",
-                    Value::String(telemetry_topic),
-                    Some("Could not parse subscription topic pattern".to_string()),
-                    None,
+                return Err(TelemetryError::new(
+                    TelemetryErrorKind::ConfigurationInvalid { 
+                        property_name: "topic_pattern".to_string(), 
+                        property_value: Value::String(telemetry_topic) 
+                    },
+                    e,
+                    true,
                 ));
             }
         };
@@ -377,7 +401,7 @@ where
     /// Returns Ok(()) on success, otherwise returns [`AIOProtocolError`].
     /// # Errors
     /// [`AIOProtocolError`] of kind [`ClientError`](crate::common::aio_protocol_error::AIOProtocolErrorKind::ClientError) if the unsubscribe fails or if the unsuback reason code doesn't indicate success.
-    pub async fn shutdown(&mut self) -> Result<(), AIOProtocolError> {
+    pub async fn shutdown(&mut self) -> Result<(), TelemetryError> {
         // Close the receiver, no longer receive messages
         self.mqtt_receiver.close();
 
@@ -396,20 +420,12 @@ where
                         }
                         Err(e) => {
                             log::error!("Unsuback error: {e}");
-                            return Err(AIOProtocolError::new_mqtt_error(
-                                Some("MQTT error on telemetry receiver unsuback".to_string()),
-                                Box::new(e),
-                                None,
-                            ));
+                            return Err(e.into());
                         }
                     },
                     Err(e) => {
                         log::error!("Client error while unsubscribing: {e}");
-                        return Err(AIOProtocolError::new_mqtt_error(
-                            Some("Client error on telemetry receiver unsubscribe".to_string()),
-                            Box::new(e),
-                            None,
-                        ));
+                        return Err(e.into());
                     }
                 }
             }
@@ -423,7 +439,7 @@ where
     /// Returns Ok(()) on success, otherwise returns [`AIOProtocolError`].
     /// # Errors
     /// [`AIOProtocolError`] of kind [`ClientError`](crate::common::aio_protocol_error::AIOProtocolErrorKind::ClientError) if the subscribe fails or if the suback reason code doesn't indicate success.
-    async fn try_subscribe(&mut self) -> Result<(), AIOProtocolError> {
+    async fn try_subscribe(&mut self) -> Result<(), TelemetryError> {
         let subscribe_result = self
             .mqtt_client
             .subscribe(&self.telemetry_topic, QoS::AtLeastOnce)
@@ -434,20 +450,12 @@ where
                 Ok(()) => { /* Success */ }
                 Err(e) => {
                     log::error!("Suback error: {e}");
-                    return Err(AIOProtocolError::new_mqtt_error(
-                        Some("MQTT error on telemetry receiver suback".to_string()),
-                        Box::new(e),
-                        None,
-                    ));
+                    return Err(e.into());
                 }
             },
             Err(e) => {
                 log::error!("Client error while subscribing: {e}");
-                return Err(AIOProtocolError::new_mqtt_error(
-                    Some("Client error on telemetry receiver subscribe".to_string()),
-                    Box::new(e),
-                    None,
-                ));
+                return Err(e.into());
             }
         }
         Ok(())
@@ -467,7 +475,7 @@ where
     /// [`AIOProtocolError`] of kind [`ClientError`](crate::common::aio_protocol_error::AIOProtocolErrorKind::ClientError) if the subscribe fails or if the suback reason code doesn't indicate success.
     pub async fn recv(
         &mut self,
-    ) -> Option<Result<(TelemetryMessage<T>, Option<AckToken>), AIOProtocolError>> {
+    ) -> Option<Result<(TelemetryMessage<T>, Option<AckToken>), TelemetryError>> {
         // Subscribe to the telemetry topic if not already subscribed
         if self.receiver_state == TelemetryReceiverState::New {
             if let Err(e) = self.try_subscribe().await {

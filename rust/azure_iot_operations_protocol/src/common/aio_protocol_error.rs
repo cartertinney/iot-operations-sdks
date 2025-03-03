@@ -6,6 +6,7 @@ use std::fmt;
 use std::time::Duration;
 
 use crate::common::topic_processor::{TopicPatternError, TopicPatternErrorKind};
+use crate::common::hybrid_logical_clock::{HLCError, HLCErrorKind, ParseHLCError};
 
 /// Represents the kind of error that occurs in an Azure IoT Operations Protocol
 #[derive(Debug, PartialEq)]
@@ -755,14 +756,38 @@ impl AIOProtocolError {
     }
 }
 
-// impl From<TopicPatternError> for AIOProtocolError {
-//     fn from(error: TopicPatternError) -> Self {
-//         AIOProtocolError::new_configuration_invalid_error(
-//             None,
-//             "topic_pattern",
-//             Value::String(error.to_string()),
-//             None,
-//             None,
-//         )
-//     }
-// }
+impl From<HLCError> for AIOProtocolError {
+    fn from(error: HLCError) -> Self {
+        match error.kind() {
+            HLCErrorKind::OverflowWarning => AIOProtocolError::new_internal_logic_error(
+                true,
+                false,
+                None,
+                None,
+                "Counter",
+                None,
+                Some("Integer overflow on HybridLogicalClock counter".to_string()),
+                None,
+            ),
+            HLCErrorKind::ClockDrift => AIOProtocolError::new_state_invalid_error(
+                "MaxClockDrift",
+                None,
+                Some("HybridLogicalClock drift is greater than the maximum allowed drift".to_string()),
+                None,
+            ),
+        }
+    }
+}
+
+impl From<ParseHLCError> for AIOProtocolError {
+    fn from(error: ParseHLCError) -> Self {
+        AIOProtocolError::new_header_invalid_error(
+            "HybridLogicalClock",
+            error.input.as_str(),
+            false,
+            None,
+            Some(format!("{error}")),
+            None
+        )
+    }
+}

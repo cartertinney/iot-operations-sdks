@@ -9,8 +9,6 @@ use std::{
 
 use uuid::Uuid;
 
-use super::aio_protocol_error::AIOProtocolError;
-
 /// Recommended default value for max clock drift if not specified.
 pub const DEFAULT_MAX_CLOCK_DRIFT: Duration = Duration::from_secs(60);
 
@@ -62,7 +60,7 @@ impl HybridLogicalClock {
         &mut self,
         other: &HybridLogicalClock,
         max_clock_drift: Duration,
-    ) -> Result<(), AIOProtocolError> {
+    ) -> Result<(), HLCError> {
         let now = now_ms_precision();
         // Don't update from the same node.
         if self.node_id == other.node_id {
@@ -108,7 +106,7 @@ impl HybridLogicalClock {
     ///
     /// [`AIOProtocolError`] of kind [`StateInvalid`](crate::common::aio_protocol_error::AIOProtocolErrorKind::StateInvalid) if
     /// the [`HybridLogicalClock`]'s timestamp is too far in the future (determined by `max_clock_drift`) compared to [`SystemTime::now()`]
-    pub fn update_now(&mut self, max_clock_drift: Duration) -> Result<(), AIOProtocolError> {
+    pub fn update_now(&mut self, max_clock_drift: Duration) -> Result<(), HLCError> {
         let now = now_ms_precision();
 
         // if now later than self, set the time to that and reset the counter
@@ -131,30 +129,13 @@ impl HybridLogicalClock {
     ///
     /// [`AIOProtocolError`] of kind [`StateInvalid`](crate::common::aio_protocol_error::AIOProtocolErrorKind::StateInvalid)
     /// if the [`HybridLogicalClock`]'s timestamp is too far in the future (determined by `max_clock_drift`)
-    fn validate(&self, now: SystemTime, max_clock_drift: Duration) -> Result<(), AIOProtocolError> {
+    fn validate(&self, now: SystemTime, max_clock_drift: Duration) -> Result<(), HLCError> {
         if self.counter == u64::MAX {
-            return Err(AIOProtocolError::new_internal_logic_error(
-                true,
-                false,
-                None,
-                None,
-                "Counter",
-                None,
-                Some("Integer overflow on HybridLogicalClock counter".to_string()),
-                None,
-            ));
+            return Err(HLCErrorKind::OverflowWarning)?;
         }
         if let Ok(diff) = self.timestamp.duration_since(now) {
             if diff > max_clock_drift {
-                return Err(AIOProtocolError::new_state_invalid_error(
-                    "MaxClockDrift",
-                    None,
-                    Some(
-                        "HybridLogicalClock drift is greater than the maximum allowed drift"
-                            .to_string(),
-                    ),
-                    None,
-                ));
+                return Err(HLCErrorKind::ClockDrift)?;
             }
         } // else negative time difference is ok, we only care if the HLC is too far in the future
 
@@ -178,62 +159,42 @@ impl Display for HybridLogicalClock {
 }
 
 impl FromStr for HybridLogicalClock {
-    type Err = AIOProtocolError;
+    type Err = ParseHLCError;
 
-    fn from_str(s: &str) -> Result<Self, AIOProtocolError> {
+    fn from_str(s: &str) -> Result<Self, ParseHLCError> {
         let parts: Vec<&str> = s.split(':').collect();
         if parts.len() != 3 {
-            return Err(AIOProtocolError::new_header_invalid_error(
-                "HybridLogicalClock",
-                s,
-                false,
-                None,
-                None,
-                None,
-            ));
+            return Err(ParseHLCError {
+                message: "Incorrect format".to_string(),
+                input: s.to_string(),
+            })
         }
 
         // Validate first part (timestamp)
         let ms_since_epoch = match parts[0].parse::<u64>() {
             Ok(ms) => ms,
             Err(e) => {
-                return Err(AIOProtocolError::new_header_invalid_error(
-                    "HybridLogicalClock",
-                    s,
-                    false,
-                    None,
-                    Some(format!(
-                        "Malformed HLC. Could not parse first segment as an integer: {e}"
-                    )),
-                    None,
-                ));
+                return Err(ParseHLCError {
+                    message: format!("Malformed HLC. Could not parse first segment as an integer: {e}"),
+                    input: s.to_string(),
+                })
             }
         };
         let Some(timestamp) = UNIX_EPOCH.checked_add(Duration::from_millis(ms_since_epoch)) else {
-            return Err(AIOProtocolError::new_header_invalid_error(
-                "HybridLogicalClock",
-                s,
-                false,
-                None,
-                Some("Malformed HLC. Timestamp is out of range.".to_string()),
-                None,
-            ));
+            return Err(ParseHLCError {
+                message: "Malformed HLC. Timestamp is out of range.".to_string(),
+                input: s.to_string(),
+            })
         };
 
         // Validate second part (counter)
         let counter = match parts[1].parse::<u64>() {
             Ok(val) => val,
             Err(e) => {
-                return Err(AIOProtocolError::new_header_invalid_error(
-                    "HybridLogicalClock",
-                    s,
-                    false,
-                    None,
-                    Some(format!(
-                        "Malformed HLC. Could not parse second segment as an integer: {e}"
-                    )),
-                    None,
-                ));
+                return Err(ParseHLCError {
+                    message: format!("Malformed HLC. Could not parse second segment as an integer: {e}"),
+                    input: s.to_string(),
+                });
             }
         };
 
@@ -283,6 +244,37 @@ fn now_ms_precision() -> SystemTime {
     now
 }
 
+/// Represents errors that occur in the use of an HLC
+#[derive(Debug, thiserror::Error)]
+#[error("{0}")]
+pub struct HLCError(#[from]HLCErrorKind);
+
+impl HLCError {
+    /// Returns the corresponding [`HLCErrorKind`] for this error
+    pub fn kind(&self) -> &HLCErrorKind {
+        &self.0
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum HLCErrorKind {
+    #[error("counter cannot be incremented")]
+    OverflowWarning,
+    #[error("exceeds max clock drift")]
+    ClockDrift,
+}
+
+/// Represents errors that occur when parsing an HLC from a string
+#[derive(Debug, thiserror::Error)]
+#[error("{message}")]
+pub struct ParseHLCError {
+    /// The error message
+    message: String,
+    /// The input string that failed to parse
+    // TODO: is this needed? Only here for AIOProtocolError compat
+    pub input: String,
+}
+
 // Functions to allow manipulation of the system time for testing purposes
 #[cfg(test)]
 use std::cell::Cell;
@@ -301,12 +293,7 @@ fn set_time_offset(offset: Duration, positive: bool) {
 
 #[cfg(test)]
 mod tests {
-    use crate::common::{
-        aio_protocol_error::AIOProtocolErrorKind,
-        hybrid_logical_clock::{
-            now_ms_precision, set_time_offset, HybridLogicalClock, DEFAULT_MAX_CLOCK_DRIFT,
-        },
-    };
+    use super::*;
     use std::time::{Duration, UNIX_EPOCH};
     use test_case::test_case;
     use uuid::Uuid;
@@ -335,9 +322,7 @@ mod tests {
             Ok(()) => assert!(should_succeed),
             Err(e) => {
                 assert!(!should_succeed);
-                assert_eq!(e.kind, AIOProtocolErrorKind::StateInvalid);
-                assert_eq!(e.property_name, Some("MaxClockDrift".to_string()));
-                assert_eq!(e.property_value, None);
+                matches!(e.kind(), HLCErrorKind::ClockDrift);
             }
         }
     }
@@ -367,9 +352,7 @@ mod tests {
         match hlc.validate(now_ms_precision(), max_drift) {
             Ok(()) => panic!("Expected error"),
             Err(e) => {
-                assert_eq!(e.kind, AIOProtocolErrorKind::StateInvalid);
-                assert_eq!(e.property_name, Some("MaxClockDrift".to_string()));
-                assert_eq!(e.property_value, None);
+                matches!(e.kind(), HLCErrorKind::ClockDrift);
             }
         }
     }
@@ -383,12 +366,7 @@ mod tests {
         match hlc.validate(now_ms_precision(), DEFAULT_MAX_CLOCK_DRIFT) {
             Ok(()) => panic!("Expected error"),
             Err(e) => {
-                assert_eq!(e.kind, AIOProtocolErrorKind::InternalLogicError);
-                assert!(e.is_shallow);
-                assert!(!e.is_remote);
-                assert_eq!(e.http_status_code, None);
-                assert_eq!(e.property_name, Some("Counter".to_string()));
-                assert_eq!(e.property_value, None);
+                matches!(e.kind(), HLCErrorKind::OverflowWarning);
             }
         }
 
@@ -434,9 +412,7 @@ mod tests {
             }
             Err(e) => {
                 assert!(!should_succeed);
-                assert_eq!(e.kind, AIOProtocolErrorKind::StateInvalid);
-                assert_eq!(e.property_name, Some("MaxClockDrift".to_string()));
-                assert_eq!(e.property_value, None);
+                matches!(e.kind(), HLCErrorKind::ClockDrift);
             }
         }
     }
@@ -561,9 +537,7 @@ mod tests {
             }
             Err(e) => {
                 assert!(!should_succeed);
-                assert_eq!(e.kind, AIOProtocolErrorKind::StateInvalid);
-                assert_eq!(e.property_name, Some("MaxClockDrift".to_string()));
-                assert_eq!(e.property_value, None);
+                matches!(e.kind(), HLCErrorKind::ClockDrift);
                 // self hlc should not have been updated
                 assert_eq!(self_hlc.counter, 0);
                 assert_eq!(self_hlc.timestamp, self_ts_copy);
@@ -629,8 +603,7 @@ mod tests {
             }
             Err(e) => {
                 assert!(!should_succeed);
-                assert_eq!(e.kind, AIOProtocolErrorKind::InternalLogicError);
-                assert_eq!(e.property_name, Some("Counter".to_string()));
+                matches!(e.kind(), HLCErrorKind::OverflowWarning);
                 // self hlc should not have been updated
                 assert_eq!(self_hlc.counter, self_counter_copy);
                 assert_eq!(self_hlc.timestamp, self_ts_copy);

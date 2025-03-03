@@ -16,7 +16,7 @@ use crate::{
     application::{ApplicationContext, ApplicationHybridLogicalClock},
     common::{
         aio_protocol_error::{AIOProtocolError, AIOProtocolErrorKind, Value},
-        hybrid_logical_clock::HybridLogicalClock,
+        hybrid_logical_clock::{HybridLogicalClock, HLCError},
         is_invalid_utf8,
         payload_serialize::{
             DeserializationError, FormatIndicator, PayloadSerialize, SerializedPayload,
@@ -829,13 +829,13 @@ where
                                             response_arguments.invalid_property_name =
                                                 Some(UserProperty::Timestamp.to_string());
                                             response_arguments.invalid_property_value = Some(value);
-                                            match e.kind {
-                                                AIOProtocolErrorKind::StateInvalid => {
+                                            match e {
+                                                HLCError::MaxClockDrift => {
                                                     response_arguments.status_code =
                                                         StatusCode::ServiceUnavailable;
                                                 }
                                                 _ => {
-                                                    // AIOProtocolErrorKind::InternalLogicError should route here,
+                                                    // HLCError::Overflow should route here,
                                                     // but anything unexpected should also be classified as InternalServerError
                                                     response_arguments.status_code =
                                                         StatusCode::InternalServerError;
