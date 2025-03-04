@@ -309,10 +309,10 @@ where
     /// * `client` - [`ManagedClient`] to use for telemetry communication.
     /// * `receiver_options` - [`TelemetryReceiverOptions`] to configure the telemetry receiver.
     ///
-    /// Returns Ok([`TelemetryReceiver`]) on success, otherwise returns[`AIOProtocolError`].
+    /// Returns Ok([`TelemetryReceiver`]) on success, otherwise returns[`TelemetryError`].
     ///
     /// # Errors
-    /// [`AIOProtocolError`] of kind [`ConfigurationInvalid`](crate::common::aio_protocol_error::AIOProtocolErrorKind::ConfigurationInvalid)
+    /// [`TelemetryError`] of kind [`ConfigurationInvalid`](crate::telemetry::TelemetryErrorKind::ConfigurationInvalid)
     /// - [`topic_pattern`](TelemetryReceiverOptions::topic_pattern),
     ///   [`topic_namespace`](TelemetryReceiverOptions::topic_namespace), are Some and and invalid
     ///   or contain a token with no valid replacement
@@ -396,9 +396,9 @@ where
     /// from the MQTT client, any messages that have not been processed can still be received by the
     /// receiver. If the method returns an error, it may be called again to attempt the unsubscribe again.
     ///
-    /// Returns Ok(()) on success, otherwise returns [`AIOProtocolError`].
+    /// Returns Ok(()) on success, otherwise returns [`TelemetryError`].
     /// # Errors
-    /// [`AIOProtocolError`] of kind [`ClientError`](crate::common::aio_protocol_error::AIOProtocolErrorKind::ClientError) if the unsubscribe fails or if the unsuback reason code doesn't indicate success.
+    /// [`TelemetryError`] of kind [`MqttError`](crate::telemetry::TelemetryErrorKind::MqttError) if the unsubscribe fails or if the unsuback reason code doesn't indicate success.
     pub async fn shutdown(&mut self) -> Result<(), TelemetryError> {
         // Close the receiver, no longer receive messages
         self.mqtt_receiver.close();
@@ -434,9 +434,9 @@ where
 
     /// Subscribe to the telemetry topic.
     ///
-    /// Returns Ok(()) on success, otherwise returns [`AIOProtocolError`].
+    /// Returns Ok(()) on success, otherwise returns [`TelemetryError`].
     /// # Errors
-    /// [`AIOProtocolError`] of kind [`ClientError`](crate::common::aio_protocol_error::AIOProtocolErrorKind::ClientError) if the subscribe fails or if the suback reason code doesn't indicate success.
+    /// [`TelemetryError`] of kind [`MqttError`](crate::telemetry::TelemetryErrorKind::MqttError) if the subscribe fails or if the suback reason code doesn't indicate success.
     async fn try_subscribe(&mut self) -> Result<(), TelemetryError> {
         let subscribe_result = self
             .mqtt_client
@@ -463,14 +463,14 @@ where
     /// If there are messages:
     /// - Returns Ok([`TelemetryMessage`], [`Option<AckToken>`]) on success
     ///     - If the message is received with Quality of Service 1 an [`AckToken`] is returned.
-    /// - Returns [`AIOProtocolError`] on error.
+    /// - Returns [`TelemetryError`] on error.
     ///
     /// A received message can be acknowledged via the [`AckToken`] by calling [`AckToken::ack`] or dropping the [`AckToken`].
     ///
     /// Will also subscribe to the telemetry topic if not already subscribed.
     ///
     /// # Errors
-    /// [`AIOProtocolError`] of kind [`ClientError`](crate::common::aio_protocol_error::AIOProtocolErrorKind::ClientError) if the subscribe fails or if the suback reason code doesn't indicate success.
+    /// [`TelemetryError`] of kind [`MqttError`](crate::telemetry::TelemetryErrorKind::MqttError) if the subscribe fails or if the suback reason code doesn't indicate success.
     pub async fn recv(
         &mut self,
     ) -> Option<Result<(TelemetryMessage<T>, Option<AckToken>), TelemetryError>> {

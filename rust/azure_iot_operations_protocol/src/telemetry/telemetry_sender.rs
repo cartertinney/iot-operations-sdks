@@ -195,9 +195,9 @@ impl<T: PayloadSerialize> TelemetryMessageBuilder<T> {
     /// Add a payload to the telemetry message. Validates successful serialization of the payload.
     ///
     /// # Errors
-    /// [`AIOProtocolError`] of kind [`PayloadInvalid`](crate::common::aio_protocol_error::AIOProtocolErrorKind::PayloadInvalid) if serialization of the payload fails
+    /// [`TelemetryError`] of kind [`PayloadInvalid`](crate::telemetry::TelemetryErrorKind::PayloadInvalid) if serialization of the payload fails
     ///
-    /// [`AIOProtocolError`] of kind [`ConfigurationInvalid`](crate::common::aio_protocol_error::AIOProtocolErrorKind::ConfigurationInvalid) if the content type is not valid utf-8
+    /// [`TelemetryError`] of kind [`ConfigurationInvalid`](crate::telemetry::TelemetryErrorKind::ConfigurationInvalid) if the content type is not valid utf-8
     pub fn payload(&mut self, payload: T) -> Result<&mut Self, TelemetryError> {
         match payload.serialize() {
             Err(e) => Err(TelemetryError::new(
@@ -348,9 +348,9 @@ where
     /// * `client` - The MQTT client to use for telemetry communication.
     /// * `sender_options` - Configuration options.
     ///
-    /// Returns Ok([`TelemetrySender`]) on success, otherwise returns [`AIOProtocolError`].
+    /// Returns Ok([`TelemetrySender`]) on success, otherwise returns [`TelemetryError`].
     /// # Errors
-    /// [`AIOProtocolError`] of kind [`ConfigurationInvalid`](crate::common::aio_protocol_error::AIOProtocolErrorKind::ConfigurationInvalid) if
+    /// [`TelemetryError`] of kind [`ConfigurationInvalid`](crate::telemetry::TelemetryErrorKind::ConfigurationInvalid) if
     /// - [`topic_pattern`](TelemetrySenderOptions::topic_pattern) is empty or whitespace
     /// - [`topic_pattern`](TelemetrySenderOptions::topic_pattern),
     ///     [`topic_namespace`](TelemetrySenderOptions::topic_namespace),
@@ -410,18 +410,18 @@ where
 
     /// Sends a [`TelemetryMessage`].
     ///
-    /// Returns `Ok(())` on success, otherwise returns [`AIOProtocolError`].
+    /// Returns `Ok(())` on success, otherwise returns [`TelemetryError`].
     /// # Arguments
     /// * `message` - [`TelemetryMessage`] to send
     /// # Errors
-    /// [`AIOProtocolError`] of kind [`MqttError`](crate::common::aio_protocol_error::AIOProtocolErrorKind::ClientError) if
+    /// [`TelemetryError`] of kind [`MqttError`](crate::telemetry::TelemetryErrorKind::MqttError) if
     /// - The publish fails
     /// - The puback reason code doesn't indicate success.
     ///
-    /// [`AIOProtocolError`] of kind [`InternalLogicError`](crate::common::aio_protocol_error::AIOProtocolErrorKind::InternalLogicError) if
+    /// [`TelemetryError`] of kind [`InternalLogicError`](crate::telemetry::TelemetryErrorKind::InternalLogicError) if
     /// - the [`ApplicationHybridLogicalClock`]'s counter would be incremented and overflow beyond [`u64::MAX`] when preparing the timestamp for the message
     ///
-    /// [`AIOProtocolError`] of kind [`StateInvalid`](crate::common::aio_protocol_error::AIOProtocolErrorKind::StateInvalid) if
+    /// [`TelemetryError`] of kind [`StateInvalid`](crate::telemetry::TelemetryErrorKind::StateInvalid) if
     /// - the [`ApplicationHybridLogicalClock`]'s timestamp is too far in the future
     pub async fn send(&self, mut message: TelemetryMessage<T>) -> Result<(), TelemetryError> {
         // Validate parameters. Custom user data, timeout, QoS, and payload serialization have already been validated in TelemetryMessageBuilder
