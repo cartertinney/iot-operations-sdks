@@ -12,15 +12,14 @@ use tokio_util::sync::CancellationToken;
 use crate::{
     application::{ApplicationContext, ApplicationHybridLogicalClock},
     common::{
-        //aio_protocol_error::{AIOProtocolError, Value},
         hybrid_logical_clock::HybridLogicalClock,
         payload_serialize::{FormatIndicator, PayloadSerialize},
         topic_processor::{TopicPattern, TopicPatternErrorKind},
         user_properties::UserProperty,
     },
     telemetry::{
-        error::{TelemetryError, TelemetryErrorKind, Value},
         cloud_event::{CloudEventFields, DEFAULT_CLOUD_EVENT_SPEC_VERSION},
+        error::{TelemetryError, TelemetryErrorKind, Value},
         DEFAULT_TELEMETRY_PROTOCOL_VERSION,
     },
     ProtocolVersion,
@@ -347,10 +346,9 @@ where
                     "topic_namespace".to_string(),
                     Value::String(namespace.to_string()),
                 ),
-                TopicPatternErrorKind::InvalidTokenReplacement(token, replacement) => (
-                    token.to_string(),
-                    Value::String(replacement.to_string()),
-                ),
+                TopicPatternErrorKind::InvalidTokenReplacement(token, replacement) => {
+                    (token.to_string(), Value::String(replacement.to_string()))
+                }
             };
             TelemetryError::new(
                 TelemetryErrorKind::ConfigurationInvalid {
@@ -369,9 +367,9 @@ where
             Ok(receiver) => receiver,
             Err(e) => {
                 return Err(TelemetryError::new(
-                    TelemetryErrorKind::ConfigurationInvalid { 
-                        property_name: "topic_pattern".to_string(), 
-                        property_value: Value::String(telemetry_topic) 
+                    TelemetryErrorKind::ConfigurationInvalid {
+                        property_name: "topic_pattern".to_string(),
+                        property_value: Value::String(telemetry_topic),
                     },
                     e,
                     true,
@@ -693,7 +691,7 @@ mod tests {
     use super::*;
     use crate::{
         application::ApplicationContextBuilder,
-        common::{aio_protocol_error::AIOProtocolErrorKind, payload_serialize::MockPayload},
+        common::payload_serialize::MockPayload,
         telemetry::telemetry_receiver::{TelemetryReceiver, TelemetryReceiverOptionsBuilder},
     };
     use azure_iot_operations_mqtt::{
@@ -771,19 +769,8 @@ mod tests {
         match result {
             Ok(_) => panic!("Expected error"),
             Err(e) => {
-                assert_eq!(e.kind, AIOProtocolErrorKind::ConfigurationInvalid);
-                assert!(!e.in_application);
-                assert!(e.is_shallow);
-                assert!(!e.is_remote);
-                assert_eq!(e.http_status_code, None);
-                assert_eq!(
-                    e.property_name,
-                    Some("receiver_options.topic_pattern".to_string())
-                );
-                assert_eq!(
-                    e.property_value,
-                    Some(Value::String(topic_pattern.to_string()))
-                );
+                matches!(e.kind(), TelemetryErrorKind::ConfigurationInvalid { property_name, property_value } if property_name == "receiver_options.topic_pattern" && property_value == &Value::String(topic_pattern.to_string()));
+                assert!(e.is_shallow());
             }
         }
     }

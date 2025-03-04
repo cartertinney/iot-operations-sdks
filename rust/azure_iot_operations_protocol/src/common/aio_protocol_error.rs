@@ -5,8 +5,8 @@ use std::error::Error;
 use std::fmt;
 use std::time::Duration;
 
-use crate::common::topic_processor::{TopicPatternError, TopicPatternErrorKind};
 use crate::common::hybrid_logical_clock::{HLCError, HLCErrorKind, ParseHLCError};
+use crate::common::topic_processor::{TopicPatternError, TopicPatternErrorKind};
 
 /// Represents the kind of error that occurs in an Azure IoT Operations Protocol
 #[derive(Debug, PartialEq)]
@@ -772,7 +772,10 @@ impl From<HLCError> for AIOProtocolError {
             HLCErrorKind::ClockDrift => AIOProtocolError::new_state_invalid_error(
                 "MaxClockDrift",
                 None,
-                Some("HybridLogicalClock drift is greater than the maximum allowed drift".to_string()),
+                Some(
+                    "HybridLogicalClock drift is greater than the maximum allowed drift"
+                        .to_string(),
+                ),
                 None,
             ),
         }
@@ -787,7 +790,7 @@ impl From<ParseHLCError> for AIOProtocolError {
             false,
             None,
             Some(format!("{error}")),
-            None
+            None,
         )
     }
 }

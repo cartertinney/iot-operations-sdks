@@ -4,11 +4,11 @@ use std::collections::HashMap;
 
 use azure_iot_operations_mqtt::interface::{AckToken, ManagedClient};
 use azure_iot_operations_protocol::application::ApplicationContext;
-use azure_iot_operations_protocol::common::aio_protocol_error::AIOProtocolError;
 use azure_iot_operations_protocol::telemetry::telemetry_receiver::{
     TelemetryMessage as TelemetryMessageBase, TelemetryReceiver as TelemetryReceiverBase,
     TelemetryReceiverOptionsBuilder as TelemetryReceiverOptionsBaseBuilder,
 };
+use azure_iot_operations_protocol::telemetry::TelemetryError;
 
 use super::super::common_types::common_options::TelemetryOptions;
 use super::telemetry_collection::TelemetryCollection;
@@ -68,7 +68,7 @@ where
     ///
     /// # Errors
     /// [`AIOProtocolError`] if there is a failure in graceful shutdown
-    pub async fn shutdown(&mut self) -> Result<(), AIOProtocolError> {
+    pub async fn shutdown(&mut self) -> Result<(), TelemetryError> {
         self.0.shutdown().await
     }
 
@@ -78,7 +78,7 @@ where
     /// [`AIOProtocolError`] if there is a failure receiving a message
     pub async fn recv(
         &mut self,
-    ) -> Option<Result<(TelemetryMessage, Option<AckToken>), AIOProtocolError>> {
+    ) -> Option<Result<(TelemetryMessage, Option<AckToken>), TelemetryError>> {
         self.0.recv().await
     }
 }

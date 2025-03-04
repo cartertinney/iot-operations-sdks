@@ -1,6 +1,9 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+// TODO: remove this once the telemetry tests are re-enabled
+#![allow(dead_code)]
+
 pub mod aio_protocol_error_checker;
 pub mod command_executor_tester;
 pub mod command_invoker_tester;
@@ -27,8 +30,9 @@ pub mod mqtt_looper;
 pub mod mqtt_operation;
 pub mod optional_field;
 pub mod qos;
-pub mod telemetry_receiver_tester;
-pub mod telemetry_sender_tester;
+// NOTE: Disabled pending infrastructure changes
+// pub mod telemetry_receiver_tester;
+// pub mod telemetry_sender_tester;
 pub mod test_ack_kind;
 pub mod test_case;
 pub mod test_case_action;

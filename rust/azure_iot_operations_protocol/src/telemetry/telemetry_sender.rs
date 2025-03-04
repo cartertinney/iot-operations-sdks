@@ -16,17 +16,16 @@ use crate::common::topic_processor::TopicPatternErrorKind;
 use crate::{
     application::{ApplicationContext, ApplicationHybridLogicalClock},
     common::{
-        //aio_protocol_error::{AIOProtocolError, Value},
         is_invalid_utf8,
         payload_serialize::{PayloadSerialize, SerializedPayload},
         topic_processor::TopicPattern,
         user_properties::{validate_user_properties, UserProperty},
     },
     telemetry::{
-        error::{TelemetryError, TelemetryErrorKind, Value},
         cloud_event::{
             CloudEventFields, DEFAULT_CLOUD_EVENT_EVENT_TYPE, DEFAULT_CLOUD_EVENT_SPEC_VERSION,
         },
+        error::{TelemetryError, TelemetryErrorKind, Value},
         TELEMETRY_PROTOCOL_VERSION,
     },
 };
@@ -213,7 +212,9 @@ impl<T: PayloadSerialize> TelemetryMessageBuilder<T> {
                     return Err(TelemetryError::new(
                         TelemetryErrorKind::ConfigurationInvalid {
                             property_name: "content_type".to_string(),
-                            property_value: Value::String(serialized_payload.content_type.to_string()),
+                            property_value: Value::String(
+                                serialized_payload.content_type.to_string(),
+                            ),
                         },
                         "Content type of telemetry message type is not valid UTF-8".to_string(),
                         true,
@@ -385,10 +386,9 @@ where
                     "topic_namespace".to_string(),
                     Value::String(namespace.to_string()),
                 ),
-                TopicPatternErrorKind::InvalidTokenReplacement(token, replacement) => (
-                    token.to_string(),
-                    Value::String(replacement.to_string()),
-                ),
+                TopicPatternErrorKind::InvalidTokenReplacement(token, replacement) => {
+                    (token.to_string(), Value::String(replacement.to_string()))
+                }
             };
             TelemetryError::new(
                 TelemetryErrorKind::ConfigurationInvalid {
@@ -439,11 +439,12 @@ where
             .as_publish_topic(&message.topic_tokens)
             .map_err(|e| {
                 let (property_name, property_value) = match e.kind() {
-                    TopicPatternErrorKind::InvalidTokenReplacement(token, replacement) => (
-                        token.to_string(),
-                        Value::String(replacement.to_string()),
+                    TopicPatternErrorKind::InvalidTokenReplacement(token, replacement) => {
+                        (token.to_string(), Value::String(replacement.to_string()))
+                    }
+                    _ => unreachable!(
+                        "`.as_publish_topic()` can only return InvalidTokenReplacement kind"
                     ),
-                    _ => unreachable!("`.as_publish_topic()` can only return InvalidTokenReplacement kind"),
                 };
                 TelemetryError::new(
                     TelemetryErrorKind::ConfigurationInvalid {
@@ -528,19 +529,16 @@ where
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use std::{collections::HashMap, time::Duration};
 
     use test_case::test_case;
 
+    use super::*;
     use crate::{
         application::ApplicationContextBuilder,
-        common::{
-            aio_protocol_error::{AIOProtocolErrorKind, Value},
-            payload_serialize::{FormatIndicator, MockPayload, SerializedPayload},
-        },
+        common::payload_serialize::{FormatIndicator, MockPayload, SerializedPayload},
         telemetry::telemetry_sender::{
             TelemetryMessageBuilder, TelemetrySender, TelemetrySenderOptionsBuilder,
         },
@@ -604,11 +602,11 @@ mod tests {
 
     #[test_case(""; "new_empty_topic_pattern")]
     #[test_case(" "; "new_whitespace_topic_pattern")]
-    fn test_new_empty_topic_pattern(property_value: &str) {
+    fn test_new_empty_topic_pattern(topic_pattern: &str) {
         let session = get_session();
 
         let sender_options = TelemetrySenderOptionsBuilder::default()
-            .topic_pattern(property_value)
+            .topic_pattern(topic_pattern)
             .build()
             .unwrap();
 
@@ -621,19 +619,8 @@ mod tests {
         match telemetry_sender {
             Ok(_) => panic!("Expected error"),
             Err(e) => {
-                matches!(e.kind(), AIOProtocolErrorKind::ConfigurationInvalid);
+                matches!(e.kind(), TelemetryErrorKind::ConfigurationInvalid { property_name, property_value } if property_name == "sender_options.topic_pattern" && property_value == &Value::String(topic_pattern.to_string()));
                 assert!(e.is_shallow());
-
-                // assert_eq!(e.kind, AIOProtocolErrorKind::ConfigurationInvalid);
-                // assert!(!e.in_application);
-                // assert!(e.is_shallow);
-                // assert!(!e.is_remote);
-                // assert_eq!(e.http_status_code, None);
-                // assert_eq!(
-                //     e.property_name,
-                //     Some("sender_options.topic_pattern".to_string())
-                // );
-                // assert!(e.property_value == Some(Value::String(property_value.to_string())));
             }
         }
     }
@@ -650,7 +637,8 @@ mod tests {
         let message_builder = binding.payload(mock_telemetry_payload);
         match message_builder {
             Err(e) => {
-                assert_eq!(e.kind, AIOProtocolErrorKind::PayloadInvalid);
+                matches!(e.kind(), TelemetryErrorKind::PayloadInvalid);
+                assert!(e.is_shallow());
             }
             Ok(_) => {
                 panic!("Expected error");
@@ -676,15 +664,8 @@ mod tests {
         let message_builder = binding.payload(mock_telemetry_payload);
         match message_builder {
             Err(e) => {
-                assert_eq!(e.kind, AIOProtocolErrorKind::ConfigurationInvalid);
-                assert!(!e.in_application);
-                assert!(e.is_shallow);
-                assert!(!e.is_remote);
-                assert_eq!(e.http_status_code, None);
-                assert_eq!(e.property_name, Some("content_type".to_string()));
-                assert!(
-                    e.property_value == Some(Value::String("application/json\u{0000}".to_string()))
-                );
+                matches!(e.kind(), TelemetryErrorKind::ConfigurationInvalid { property_name, property_value } if property_name == "content_type" && property_value == &Value::String("application/json\u{0000}".to_string()));
+                assert!(e.is_shallow());
             }
             Ok(_) => {
                 panic!("Expected error");

@@ -8,9 +8,7 @@ use std::{
     time::Duration,
 };
 
-use crate::common::{
-    hybrid_logical_clock::{HybridLogicalClock, DEFAULT_MAX_CLOCK_DRIFT, HLCError},
-};
+use crate::common::hybrid_logical_clock::{HLCError, HybridLogicalClock, DEFAULT_MAX_CLOCK_DRIFT};
 
 /// Struct containing the application-level [`HybridLogicalClock`].
 pub struct ApplicationHybridLogicalClock {

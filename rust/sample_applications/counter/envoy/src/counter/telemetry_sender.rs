@@ -15,6 +15,7 @@ use azure_iot_operations_protocol::telemetry::telemetry_sender::{
     TelemetrySender as TelemetrySenderBase,
     TelemetrySenderOptionsBuilder as TelemetrySenderOptionsBaseBuilder,
 };
+use azure_iot_operations_protocol::telemetry::TelemetryError;
 
 use super::super::common_types::common_options::TelemetryOptions;
 use super::telemetry_collection::TelemetryCollection;
@@ -59,7 +60,7 @@ impl TelemetryMessageBuilder {
     ///
     /// # Errors
     /// If the payload cannot be serialized
-    pub fn payload(&mut self, payload: TelemetryCollection) -> Result<&mut Self, AIOProtocolError> {
+    pub fn payload(&mut self, payload: TelemetryCollection) -> Result<&mut Self, TelemetryError> {
         self.inner_builder.payload(payload)?;
         Ok(self)
     }
@@ -122,7 +123,7 @@ where
     ///
     /// # Error
     /// [`AIOProtocolError`] if there is a failure sending the message
-    pub async fn send(&self, message: TelemetryMessage) -> Result<(), AIOProtocolError> {
+    pub async fn send(&self, message: TelemetryMessage) -> Result<(), TelemetryError> {
         self.0.send(message).await
     }
 }

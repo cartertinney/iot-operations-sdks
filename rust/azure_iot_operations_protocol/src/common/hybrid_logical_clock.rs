@@ -7,6 +7,7 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
+use thiserror::Error;
 use uuid::Uuid;
 
 /// Recommended default value for max clock drift if not specified.
@@ -167,7 +168,7 @@ impl FromStr for HybridLogicalClock {
             return Err(ParseHLCError {
                 message: "Incorrect format".to_string(),
                 input: s.to_string(),
-            })
+            });
         }
 
         // Validate first part (timestamp)
@@ -175,7 +176,9 @@ impl FromStr for HybridLogicalClock {
             Ok(ms) => ms,
             Err(e) => {
                 return Err(ParseHLCError {
-                    message: format!("Malformed HLC. Could not parse first segment as an integer: {e}"),
+                    message: format!(
+                        "Malformed HLC. Could not parse first segment as an integer: {e}"
+                    ),
                     input: s.to_string(),
                 })
             }
@@ -184,7 +187,7 @@ impl FromStr for HybridLogicalClock {
             return Err(ParseHLCError {
                 message: "Malformed HLC. Timestamp is out of range.".to_string(),
                 input: s.to_string(),
-            })
+            });
         };
 
         // Validate second part (counter)
@@ -192,7 +195,9 @@ impl FromStr for HybridLogicalClock {
             Ok(val) => val,
             Err(e) => {
                 return Err(ParseHLCError {
-                    message: format!("Malformed HLC. Could not parse second segment as an integer: {e}"),
+                    message: format!(
+                        "Malformed HLC. Could not parse second segment as an integer: {e}"
+                    ),
                     input: s.to_string(),
                 });
             }
@@ -245,27 +250,31 @@ fn now_ms_precision() -> SystemTime {
 }
 
 /// Represents errors that occur in the use of an HLC
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Error)]
 #[error("{0}")]
-pub struct HLCError(#[from]HLCErrorKind);
+pub struct HLCError(#[from] HLCErrorKind);
 
 impl HLCError {
     /// Returns the corresponding [`HLCErrorKind`] for this error
+    #[must_use]
     pub fn kind(&self) -> &HLCErrorKind {
         &self.0
     }
 }
 
-#[derive(Debug, thiserror::Error)]
+/// A list specifying categories of HLC error
+#[derive(Debug, Error)]
 pub enum HLCErrorKind {
+    /// The counter would be incremented to a value that would overflow beyond [`u64::MAX`]
     #[error("counter cannot be incremented")]
     OverflowWarning,
+    /// The HLC's timestamp is too far in the future compared to the current time
     #[error("exceeds max clock drift")]
     ClockDrift,
 }
 
 /// Represents errors that occur when parsing an HLC from a string
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Error)]
 #[error("{message}")]
 pub struct ParseHLCError {
     /// The error message

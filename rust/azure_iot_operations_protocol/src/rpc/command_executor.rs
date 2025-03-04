@@ -15,8 +15,8 @@ use tokio_util::sync::CancellationToken;
 use crate::{
     application::{ApplicationContext, ApplicationHybridLogicalClock},
     common::{
-        aio_protocol_error::{AIOProtocolError, AIOProtocolErrorKind, Value},
-        hybrid_logical_clock::{HybridLogicalClock, HLCError},
+        aio_protocol_error::{AIOProtocolError, Value},
+        hybrid_logical_clock::{HLCErrorKind, HybridLogicalClock},
         is_invalid_utf8,
         payload_serialize::{
             DeserializationError, FormatIndicator, PayloadSerialize, SerializedPayload,
@@ -829,14 +829,14 @@ where
                                             response_arguments.invalid_property_name =
                                                 Some(UserProperty::Timestamp.to_string());
                                             response_arguments.invalid_property_value = Some(value);
-                                            match e {
-                                                HLCError::MaxClockDrift => {
+                                            match e.kind() {
+                                                HLCErrorKind::ClockDrift => {
                                                     response_arguments.status_code =
                                                         StatusCode::ServiceUnavailable;
                                                 }
-                                                _ => {
-                                                    // HLCError::Overflow should route here,
-                                                    // but anything unexpected should also be classified as InternalServerError
+                                                HLCErrorKind::OverflowWarning => {
+                                                    // NOTE: any HLC error kinds created in the future should also probably go here
+                                                    // but clippy doesn't like single variant _ match cases.
                                                     response_arguments.status_code =
                                                         StatusCode::InternalServerError;
                                                 }
