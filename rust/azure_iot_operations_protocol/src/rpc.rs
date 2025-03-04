@@ -42,10 +42,7 @@ pub enum StatusCode {
     /// The content type specified in the request is not supported by this implementation.
     UnsupportedMediaType = 415,
 
-    /// The request was well-formed but was unable to be followed due to semantic errors, as indicated via an [`InvocationException`](crate::common::aio_protocol_error::AIOProtocolErrorKind::InvocationException).
-    UnprocessableContent = 422,
-
-    /// Unknown error, internal logic error, or command processor error other than [`InvocationException`](crate::common::aio_protocol_error::AIOProtocolErrorKind::InvocationException).
+    /// Unknown error, internal logic error, or command processor error.
     InternalServerError = 500,
 
     /// Invalid service state preventing command from executing properly.
@@ -66,9 +63,6 @@ impl FromStr for StatusCode {
                 x if x == StatusCode::RequestTimeout as u16 => Ok(StatusCode::RequestTimeout),
                 x if x == StatusCode::UnsupportedMediaType as u16 => {
                     Ok(StatusCode::UnsupportedMediaType)
-                }
-                x if x == StatusCode::UnprocessableContent as u16 => {
-                    Ok(StatusCode::UnprocessableContent)
                 }
                 x if x == StatusCode::InternalServerError as u16 => {
                     Ok(StatusCode::InternalServerError)
@@ -115,7 +109,6 @@ mod tests {
     #[test_case(StatusCode::BadRequest; "BadRequest")]
     #[test_case(StatusCode::RequestTimeout; "RequestTimeout")]
     #[test_case(StatusCode::UnsupportedMediaType; "UnsupportedMediaType")]
-    #[test_case(StatusCode::UnprocessableContent; "UnprocessableContent")]
     #[test_case(StatusCode::InternalServerError; "InternalServerError")]
     #[test_case(StatusCode::ServiceUnavailable; "ServiceUnavailable")]
     #[test_case(StatusCode::VersionNotSupported; "VersionNotSupported")]

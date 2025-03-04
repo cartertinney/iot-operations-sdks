@@ -49,7 +49,7 @@ impl ApplicationHybridLogicalClock {
     ///
     /// [`AIOProtocolError`] of kind [`StateInvalid`](crate::common::aio_protocol_error::AIOProtocolErrorKind::StateInvalid) if
     /// the latest [`HybridLogicalClock`] (of [`ApplicationHybridLogicalClock`] or `other`)'s timestamp is too far in
-    /// the future (determined by [`max_clock_drift`](ApplicationHybridLogicalClock::max_clock_drift)) compared to [`SystemTime::now()`]
+    /// the future (determined by [`max_clock_drift`](ApplicationHybridLogicalClock::max_clock_drift)) compared to `SystemTime::now()`
     pub(crate) fn update(&self, other_hlc: &HybridLogicalClock) -> Result<(), HLCError> {
         self.hlc
             .lock()
@@ -65,7 +65,7 @@ impl ApplicationHybridLogicalClock {
     ///
     /// [`AIOProtocolError`] of kind [`StateInvalid`](crate::common::aio_protocol_error::AIOProtocolErrorKind::StateInvalid) if
     /// the [`ApplicationHybridLogicalClock`]'s timestamp is too far in the future (determined
-    /// by [`max_clock_drift`](ApplicationHybridLogicalClock::max_clock_drift)) compared to [`SystemTime::now()`]
+    /// by [`max_clock_drift`](ApplicationHybridLogicalClock::max_clock_drift)) compared to `SystemTime::now()`
     pub(crate) fn update_now(&self) -> Result<String, HLCError> {
         let mut hlc = self.hlc.lock().unwrap();
         hlc.update_now(self.max_clock_drift)?;

@@ -29,7 +29,7 @@ use crate::{
 };
 
 /// Default message expiry interval only for when the message expiry interval is not present
-const DEFAULT_MESSAGE_EXPIRY_INTERVAL: u64 = 10;
+const DEFAULT_MESSAGE_EXPIRY_INTERVAL_SECONDS: u32 = 10;
 
 /// Message for when expiration time is unable to be calculated, internal logic error
 const INTERNAL_LOGIC_EXPIRATION_ERROR: &str =
@@ -80,7 +80,7 @@ where
     pub topic_tokens: HashMap<String, String>,
     // Internal fields
     command_name: String,
-    response_tx: oneshot::Sender<Result<CommandResponse<TResp>, String>>,
+    response_tx: oneshot::Sender<CommandResponse<TResp>>,
     publish_completion_rx: oneshot::Receiver<Result<(), AIOProtocolError>>,
 }
 
@@ -111,32 +111,15 @@ where
     /// [`AIOProtocolError`] of kind [`InternalLogicError`](crate::common::aio_protocol_error::AIOProtocolErrorKind::InternalLogicError)
     /// if the response publish completion fails. This should not happen.
     pub async fn complete(self, response: CommandResponse<TResp>) -> Result<(), AIOProtocolError> {
-        self.send_response(Ok(response)).await
-    }
+        // We can ignore the error here. If the receiver of the response is dropped it may be
+        // because the executor is shutting down in which case the receive below will fail.
+        // If the executor is not shutting down, the receive below will succeed and we'll receive a
+        // timeout error since that is the only possible error at this point.
+        let _ = self.response_tx.send(response);
 
-    /// Consumes the command request and reports an error to the executor. An attempt is made to
-    /// send the error to the invoker.
-    ///
-    /// Returns Ok(()) on success, otherwise returns [`AIOProtocolError`].
-    ///
-    /// # Arguments
-    /// * `error` - The error message to send.
-    ///
-    /// # Errors
-    ///
-    /// [`AIOProtocolError`] of kind [`Timeout`](crate::common::aio_protocol_error::AIOProtocolErrorKind::Timeout) if the command request
-    /// has expired.
-    ///
-    /// [`AIOProtocolError`] of kind [`ClientError`](crate::common::aio_protocol_error::AIOProtocolErrorKind::ClientError) if the error
-    /// acknowledgement returns an error.
-    ///
-    /// [`AIOProtocolError`] of kind [`Cancellation`](crate::common::aio_protocol_error::AIOProtocolErrorKind::Cancellation) if the
-    /// executor is dropped.
-    ///
-    /// [`AIOProtocolError`] of kind [`InternalLogicError`](crate::common::aio_protocol_error::AIOProtocolErrorKind::InternalLogicError)
-    /// if the error publish completion fails. This should not happen.
-    pub async fn error(self, error: String) -> Result<(), AIOProtocolError> {
-        self.send_response(Err(error)).await
+        self.publish_completion_rx
+            .await
+            .map_err(|_| Self::create_cancellation_error(self.command_name))?
     }
 
     fn create_cancellation_error(command_name: String) -> AIOProtocolError {
@@ -150,21 +133,6 @@ where
             ),
             Some(command_name),
         )
-    }
-
-    async fn send_response(
-        self,
-        response: Result<CommandResponse<TResp>, String>,
-    ) -> Result<(), AIOProtocolError> {
-        // We can ignore the error here. If the receiver of the response is dropped it may be
-        // because the executor is shutting down in which case the receive below will fail.
-        // If the executor is not shutting down, the receive below will succeed and we'll receive a
-        // timeout error since that is the only possible error at this point.
-        let _ = self.response_tx.send(response);
-
-        self.publish_completion_rx
-            .await
-            .map_err(|_| Self::create_cancellation_error(self.command_name))?
     }
 
     /// Check if the command response is no longer expected.
@@ -433,7 +401,6 @@ where
     ///     [`topic_namespace`](CommandExecutorOptions::topic_namespace)
     ///     are Some and invalid or contain a token with no valid replacement
     /// - [`topic_token_map`](CommandExecutorOptions::topic_token_map) is not empty and contains invalid key(s) and/or token(s)
-    /// - [`is_idempotent`](CommandExecutorOptions::is_idempotent) is false and [`cacheable_duration`](CommandExecutorOptions::cacheable_duration) is not zero
     pub fn new(
         application_context: ApplicationContext,
         client: C,
@@ -706,8 +673,9 @@ where
                     response_arguments.message_expiry_interval = Some(ct);
                     message_received_time.checked_add(Duration::from_secs(ct.into()))
                 } else {
-                    message_received_time
-                        .checked_add(Duration::from_secs(DEFAULT_MESSAGE_EXPIRY_INTERVAL))
+                    message_received_time.checked_add(Duration::from_secs(u64::from(
+                        DEFAULT_MESSAGE_EXPIRY_INTERVAL_SECONDS,
+                    )))
                 };
 
                 // Check if there was an error calculating the command expiration time
@@ -1049,7 +1017,7 @@ where
         client: C,
         pkid: u16,
         mut response_arguments: ResponseArguments,
-        response_rx: Option<oneshot::Receiver<Result<CommandResponse<TResp>, String>>>,
+        response_rx: Option<oneshot::Receiver<CommandResponse<TResp>>>,
         completion_tx: Option<oneshot::Sender<Result<(), AIOProtocolError>>>,
         cache: CommandExecutorCache,
     ) {
@@ -1085,16 +1053,7 @@ where
                     .await
                     {
                         if let Ok(response_app) = response_timer {
-                            match response_app {
-                                Ok(response) => response,
-                                Err(e) => {
-                                    response_arguments.status_code =
-                                        StatusCode::InternalServerError;
-                                    response_arguments.status_message = Some(e);
-                                    response_arguments.is_application_error = true;
-                                    break 'process_response;
-                                }
-                            }
+                            response_app
                         } else {
                             // Happens when the sender is dropped by the application.
                             response_arguments.status_code = StatusCode::InternalServerError;
@@ -1219,6 +1178,7 @@ where
         };
 
         if let Some(command_expiration_time) = response_arguments.command_expiration_time {
+            // Calculating remaining time until the command expires
             let response_message_expiry_interval =
                 command_expiration_time.saturating_duration_since(Instant::now());
             if response_message_expiry_interval.is_zero() {
@@ -1247,8 +1207,20 @@ where
                 return;
             }
 
-            let Ok(response_message_expiry_interval) =
-                response_message_expiry_interval.as_secs().try_into()
+            // Rounding remaining expiration time up to the nearest second
+            let response_message_expiry_interval =
+                if response_message_expiry_interval.as_nanos() != 0 {
+                    // NOTE: We should always be able to add 1 since the seconds portion of the
+                    // response_message_expiry_interval is always at least one less than its initial
+                    // value when received in this block.
+                    // NOTE: Rounding up to the nearest second to ensure the invoker will time out
+                    // at or before the response expires.
+                    response_message_expiry_interval.as_secs().saturating_add(1)
+                } else {
+                    response_message_expiry_interval.as_secs()
+                };
+
+            let Ok(response_message_expiry_interval) = response_message_expiry_interval.try_into()
             else {
                 // Unreachable, will be smaller than u32::MAX
                 log::error!(
@@ -1280,22 +1252,8 @@ where
         } else {
             // Happens when the command expiration time was not able to be calculated.
             // We don't cache the response in this case.
-            let response_message_expiry_interval =
-                Duration::from_secs(DEFAULT_MESSAGE_EXPIRY_INTERVAL);
-
-            let Ok(response_message_expiry_interval) =
-                response_message_expiry_interval.as_secs().try_into()
-            else {
-                // Unreachable, will be smaller than u32::MAX
-                log::error!(
-                    "[{}][pkid: {}] Message expiry interval is too large",
-                    response_arguments.command_name,
-                    pkid
-                );
-                return;
-            };
-
-            publish_properties.message_expiry_interval = Some(response_message_expiry_interval);
+            publish_properties.message_expiry_interval =
+                Some(DEFAULT_MESSAGE_EXPIRY_INTERVAL_SECONDS);
         }
 
         // Try to publish
