@@ -29,11 +29,8 @@ use metl::test_feature_kind::TestFeatureKind;
 static TEST_CASE_INDEX: atomic::AtomicI32 = atomic::AtomicI32::new(0);
 
 const PROBLEMATIC_TEST_CASES: &[&str] = &[
-    "CommandExecutorRequest_TimeoutPropagated",
     "CommandExecutorRequestExpiresWhileDisconnected_RequestNotAcknowledged",
     "CommandExecutorResponsePubAckDroppedByDisconnection_ReconnectAndSuccess",
-    "CommandExecutorUserCodeRaisesContentError_RespondsError",
-    "CommandExecutorUserCodeRaisesContentErrorWithDetails_RespondsError",
     "CommandInvokerInvalidResponseTopicPrefix_ThrowsException",
     "CommandInvokerInvalidResponseTopicSuffix_ThrowsException",
     "CommandInvokerPubAckDroppedByDisconnection_ReconnectAndSuccess",
@@ -41,7 +38,6 @@ const PROBLEMATIC_TEST_CASES: &[&str] = &[
     "CommandInvokerWithZeroTimeout_ThrowsException",
     "TelemetrySenderPubAckDroppedByDisconnection_ReconnectAndSuccess",
     "TelemetrySenderSendWithCloudEventSpecVersionNonNumeric_Success",
-    "CommandInvokerWithCustomResponseTopic_Success",
 ];
 
 /*
