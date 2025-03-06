@@ -2,7 +2,6 @@
 // Licensed under the MIT License.
 
 use std::fmt;
-use std::time::Duration;
 
 use crate::common::hybrid_logical_clock::{HLCError, HLCErrorKind};
 use azure_iot_operations_mqtt::error::{
