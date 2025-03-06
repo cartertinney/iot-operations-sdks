@@ -7,6 +7,7 @@ use std::time::Duration;
 
 use crate::common::hybrid_logical_clock::{HLCError, HLCErrorKind, ParseHLCError};
 use crate::common::topic_processor::{TopicPatternError, TopicPatternErrorKind};
+use crate::telemetry::{TelemetryError, TelemetryErrorKind};
 
 /// Represents the kind of error that occurs in an Azure IoT Operations Protocol
 #[derive(Debug, PartialEq)]
@@ -755,5 +756,41 @@ impl From<ParseHLCError> for AIOProtocolError {
             Some(format!("{error}")),
             None,
         )
+    }
+}
+
+
+impl From<TelemetryError> for AIOProtocolError {
+    fn from(error: TelemetryError) -> Self {
+        match error.kind() {
+            TelemetryErrorKind::PayloadInvalid => AIOProtocolError::new_payload_invalid_error(
+                error.is_shallow(),
+                false,
+                error.source(),
+                None,
+                Some(format!("{error}")),
+                None,
+            ),
+        }
+
+        // match error.kind() {
+        //     TelemetryErrorKind::ClientError => AIOProtocolError::new_mqtt_error(
+        //         Some(format!("{error}")),
+        //         Box::new(error),
+        //         None,
+        //     ),
+        //     TelemetryErrorKind::MqttError => AIOProtocolError::new_mqtt_error(
+        //         Some(format!("{error}")),
+        //         Box::new(error),
+        //         None,
+        //     ),
+        //     TelemetryErrorKind::UnknownError => AIOProtocolError::new_unknown_error(
+        //         false,
+        //         false,
+        //         Some(Box::new(error)),
+        //         None,
+        //     ),
+        //     _ => AIOProtocolError::new_unknown_error(false, false, Some(Box::new(error)), None),
+        // }
     }
 }

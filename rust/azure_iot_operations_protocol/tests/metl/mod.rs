@@ -30,6 +30,7 @@ pub mod mqtt_looper;
 pub mod mqtt_operation;
 pub mod optional_field;
 pub mod qos;
+pub mod telemetry_error_checker;
 // NOTE: Disabled pending infrastructure changes
 // pub mod telemetry_receiver_tester;
 // pub mod telemetry_sender_tester;

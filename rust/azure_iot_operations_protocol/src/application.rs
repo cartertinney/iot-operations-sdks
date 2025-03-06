@@ -47,7 +47,7 @@ impl ApplicationHybridLogicalClock {
     /// [`HLCError`] of kind [`OverflowWarning`](crate::common::hybrid_logical_clock::HLCErrorKind::OverflowWarning) if
     /// the [`ApplicationHybridLogicalClock`]'s counter would be set to a value that would overflow beyond [`u64::MAX`]
     ///
-    /// [`HLCError`] of kind [`StateInvalid`](crate::common::hybrid_logical_clock::HLCErrorKind::ClockDrift) if
+    /// [`HLCError`] of kind [`ClockDrift`](crate::common::hybrid_logical_clock::HLCErrorKind::ClockDrift) if
     /// the latest [`HybridLogicalClock`] (of [`ApplicationHybridLogicalClock`] or `other`)'s timestamp is too far in
     /// the future (determined by [`max_clock_drift`](ApplicationHybridLogicalClock::max_clock_drift)) compared to `SystemTime::now()`
     pub(crate) fn update(&self, other_hlc: &HybridLogicalClock) -> Result<(), HLCError> {
@@ -63,7 +63,7 @@ impl ApplicationHybridLogicalClock {
     /// [`HLCError`] of kind [`OverflowWarning`](crate::common::hybrid_logical_clock::HLCErrorKind::OverflowWarning) if
     /// the [`HybridLogicalClock`]'s counter would be incremented and overflow beyond [`u64::MAX`]
     ///
-    /// [`HLCError`] of kind [`StateInvalid`](crate::common::hybrid_logical_clock::HLCErrorKind::ClockDrift) if
+    /// [`HLCError`] of kind [`ClockDrift`](crate::common::hybrid_logical_clock::HLCErrorKind::ClockDrift) if
     /// the [`ApplicationHybridLogicalClock`]'s timestamp is too far in the future (determined
     /// by [`max_clock_drift`](ApplicationHybridLogicalClock::max_clock_drift)) compared to `SystemTime::now()`
     pub(crate) fn update_now(&self) -> Result<String, HLCError> {

@@ -4,6 +4,7 @@
 use std::collections::HashMap;
 
 use azure_iot_operations_protocol::common::aio_protocol_error::AIOProtocolErrorKind;
+use azure_iot_operations_protocol::telemetry::{TelemetryError, TelemetryErrorKind};
 use serde::Deserialize;
 
 use crate::metl::optional_field::deserialize_optional_field;
@@ -46,6 +47,32 @@ pub struct TestCaseCatch {
 }
 
 impl TestCaseCatch {
+    pub fn matches_telemetry_error(&self, error: TelemetryError) -> bool {
+
+    }
+
+    // pub fn get_telemetry_error_kind(&self) -> TelemetryErrorKind {
+    //     match self.error_kind.as_str() {
+    //         "missing header" => panic!("TelemetryErrorKind not supported for 'missing header'"),
+    //         "invalid header" => panic!("TelemetryErrorKind not supported for 'invalid header'"),
+    //         "invalid payload" => TelemetryErrorKind::PayloadInvalid,
+    //         "timeout" => panic!("TelemetryErrorKind not supported for 'timeout'"),
+    //         "cancellation" => panic!("TelemetryErrorKind not supported for 'cancellation'"),
+    //         "invalid configuration" => TelemetryErrorKind::ConfigurationInvalid,
+    //         "invalid argument" => TelemetryErrorKind::ArgumentInvalid,
+    //         "invalid state" => TelemetryErrorKind::StateInvalid,
+    //         "internal logic error" => TelemetryErrorKind::InternalLogicError,
+    //         "unknown error" => ErrorKind::UnknownError,
+    //         "execution error" => panic!("TelemetryErrorKind not supported for 'execution error'"),
+    //         "mqtt error" => TelemetryErrorKind::MqttError,
+    //         "request version not supported" => panic!("TelemetryErrorKind not supported for 'request version not supported'"),
+    //         "response version not supported" => panic!("TelemetryErrorKind not supported for 'response version not supported'"),
+    //         _ => panic!("Unrecognized error kind"),
+    //     }
+    // }
+
+
+    
     pub fn get_error_kind(&self) -> AIOProtocolErrorKind {
         match self.error_kind.as_str() {
             "missing header" => AIOProtocolErrorKind::HeaderMissing,
