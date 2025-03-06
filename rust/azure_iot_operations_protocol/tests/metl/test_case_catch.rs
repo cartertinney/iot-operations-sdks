@@ -48,7 +48,7 @@ pub struct TestCaseCatch {
 
 impl TestCaseCatch {
     pub fn matches_telemetry_error(&self, error: TelemetryError) -> bool {
-
+        match error
     }
 
     // pub fn get_telemetry_error_kind(&self) -> TelemetryErrorKind {
