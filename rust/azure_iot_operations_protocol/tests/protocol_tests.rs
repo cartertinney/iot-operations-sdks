@@ -126,7 +126,7 @@ fn test_command_invoker_session(_path: &Path, contents: String) -> datatest_stab
     {
         let mqtt_client_id = get_client_id(&test_case, "SessionInvokerTestClient", test_case_index);
         let mut mqtt_hub = MqttHub::new(mqtt_client_id.clone(), MqttEmulationLevel::Event);
-        let mut session = Session::new_from_injection(
+        let session = Session::new_from_injection(
             mqtt_hub.get_driver(),
             mqtt_hub.get_looper(),
             Box::new(ExponentialBackoffWithJitter::default()),
@@ -172,7 +172,7 @@ fn test_command_executor_session(_path: &Path, contents: String) -> datatest_sta
         let mqtt_client_id =
             get_client_id(&test_case, "SessionExecutorTestClient", test_case_index);
         let mut mqtt_hub = MqttHub::new(mqtt_client_id.clone(), MqttEmulationLevel::Event);
-        let mut session = Session::new_from_injection(
+        let session = Session::new_from_injection(
             mqtt_hub.get_driver(),
             mqtt_hub.get_looper(),
             Box::new(ExponentialBackoffWithJitter::default()),
@@ -212,20 +212,20 @@ fn test_command_executor_session(_path: &Path, contents: String) -> datatest_sta
 
 //     let test_case_index = TEST_CASE_INDEX.fetch_add(1, atomic::Ordering::Relaxed);
 
-//     if !PROBLEMATIC_TEST_CASES.contains(&test_case.test_name.as_str())
-//         && does_session_support(&test_case.requires)
-//     {
-//         let mqtt_client_id =
-//             get_client_id(&test_case, "SessionReceiverTestClient", test_case_index);
-//         let mut mqtt_hub = MqttHub::new(mqtt_client_id.clone(), MqttEmulationLevel::Event);
-//         let mut session = Session::new_from_injection(
-//             mqtt_hub.get_driver(),
-//             mqtt_hub.get_looper(),
-//             Box::new(ExponentialBackoffWithJitter::default()),
-//             mqtt_client_id,
-//             None,
-//         );
-//         let managed_client = session.create_managed_client();
+    // if !PROBLEMATIC_TEST_CASES.contains(&test_case.test_name.as_str())
+    //     && does_session_support(&test_case.requires)
+    // {
+    //     let mqtt_client_id =
+    //         get_client_id(&test_case, "SessionReceiverTestClient", test_case_index);
+    //     let mut mqtt_hub = MqttHub::new(mqtt_client_id.clone(), MqttEmulationLevel::Event);
+    //     let session = Session::new_from_injection(
+    //         mqtt_hub.get_driver(),
+    //         mqtt_hub.get_looper(),
+    //         Box::new(ExponentialBackoffWithJitter::default()),
+    //         mqtt_client_id,
+    //         None,
+    //     );
+    //     let managed_client = session.create_managed_client();
 
 //         let current_thread = Builder::new_current_thread().enable_all().build().unwrap();
 
@@ -258,19 +258,19 @@ fn test_command_executor_session(_path: &Path, contents: String) -> datatest_sta
 
 //     let test_case_index = TEST_CASE_INDEX.fetch_add(1, atomic::Ordering::Relaxed);
 
-//     if !PROBLEMATIC_TEST_CASES.contains(&test_case.test_name.as_str())
-//         && does_session_support(&test_case.requires)
-//     {
-//         let mqtt_client_id = get_client_id(&test_case, "SessionSenderTestClient", test_case_index);
-//         let mut mqtt_hub = MqttHub::new(mqtt_client_id.clone(), MqttEmulationLevel::Event);
-//         let mut session = Session::new_from_injection(
-//             mqtt_hub.get_driver(),
-//             mqtt_hub.get_looper(),
-//             Box::new(ExponentialBackoffWithJitter::default()),
-//             mqtt_client_id,
-//             None,
-//         );
-//         let managed_client = session.create_managed_client();
+    // if !PROBLEMATIC_TEST_CASES.contains(&test_case.test_name.as_str())
+    //     && does_session_support(&test_case.requires)
+    // {
+    //     let mqtt_client_id = get_client_id(&test_case, "SessionSenderTestClient", test_case_index);
+    //     let mut mqtt_hub = MqttHub::new(mqtt_client_id.clone(), MqttEmulationLevel::Event);
+    //     let session = Session::new_from_injection(
+    //         mqtt_hub.get_driver(),
+    //         mqtt_hub.get_looper(),
+    //         Box::new(ExponentialBackoffWithJitter::default()),
+    //         mqtt_client_id,
+    //         None,
+    //     );
+    //     let managed_client = session.create_managed_client();
 
 //         let current_thread = Builder::new_current_thread().enable_all().build().unwrap();
 
