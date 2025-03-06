@@ -115,29 +115,8 @@ impl From<HLCError> for TelemetryError {
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum TelemetryErrorKind {
-    /// A required MQTT header property is missing from a received message  //TODO: received only???
-    HeaderMissing {
-        /// The name of the MQTT header that is missing
-        header_name: String,
-    },
-    /// An MQTT header property has an invalid value        // TODO: can we remove MQTT information?
-    HeaderInvalid {
-        /// The name of the MQTT header that has an invalid value
-        header_name: String,
-        /// The value of the MQTT header that is invalid
-        header_value: String,
-    },
     /// Payload cannot be serialized/deserialized
     PayloadInvalid,
-    /// An operation was aborted due to timeout
-    Timeout {
-        /// The name of the timeout that was exceeded
-        timeout_name: String,
-        /// The value of the timeout that was exceeded
-        timeout_value: Duration,
-    },
-    /// An operation was cancelled
-    Cancellation,
     /// A field, configuration file, or environment variable has an invalid value
     ConfigurationInvalid {
         /// Description of which field, configuration file, or environment variable has an invalid value
@@ -175,27 +154,7 @@ pub enum TelemetryErrorKind {
 impl fmt::Display for TelemetryErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            TelemetryErrorKind::HeaderMissing { header_name } => {
-                write!(f, "Header '{header_name}' is missing")
-            }
-            TelemetryErrorKind::HeaderInvalid {
-                header_name,
-                header_value,
-            } => write!(
-                f,
-                "Header '{header_name}' has invalid value '{header_value}'",
-            ),
             TelemetryErrorKind::PayloadInvalid => write!(f, "Payload is invalid"),
-            TelemetryErrorKind::Timeout {
-                timeout_name,
-                timeout_value,
-            } => write!(
-                f,
-                "Operation timed out after {} {}",
-                timeout_value.as_secs(),
-                timeout_name
-            ),
-            TelemetryErrorKind::Cancellation => write!(f, "Operation was cancelled"),
             TelemetryErrorKind::ConfigurationInvalid {
                 property_name,
                 property_value,

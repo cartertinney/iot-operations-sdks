@@ -803,8 +803,6 @@ where
                                                         StatusCode::ServiceUnavailable;
                                                 }
                                                 HLCErrorKind::OverflowWarning => {
-                                                    // NOTE: any HLC error kinds created in the future should also probably go here
-                                                    // but clippy doesn't like single variant _ match cases.
                                                     response_arguments.status_code =
                                                         StatusCode::InternalServerError;
                                                 }

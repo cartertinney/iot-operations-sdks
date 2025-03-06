@@ -379,6 +379,7 @@ where
                     Value::String(pattern.to_string()),
                 ),
                 TopicPatternErrorKind::InvalidShareName(share_name) => (
+                    // NOTE: This should be impossible for the sender
                     "share_name".to_string(),
                     Value::String(share_name.to_string()),
                 ),

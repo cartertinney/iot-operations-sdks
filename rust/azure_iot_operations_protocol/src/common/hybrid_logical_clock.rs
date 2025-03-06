@@ -51,11 +51,11 @@ impl HybridLogicalClock {
     /// is a no-op, and will not result in an error.
     ///
     /// # Errors
-    /// [`AIOProtocolError`] of kind [`InternalLogicError`](crate::common::aio_protocol_error::AIOProtocolErrorKind::InternalLogicError) if
+    /// [`HLCError`] of kind [`OverflowWarning`](HLCErrorKind::OverflowWarning) if
     /// the [`HybridLogicalClock`]'s counter would be set to a value that would overflow beyond [`u64::MAX`]
     ///
-    /// [`AIOProtocolError`] of kind [`StateInvalid`](crate::common::aio_protocol_error::AIOProtocolErrorKind::StateInvalid) if
-    /// the latest [`HybridLogicalClock`] (of `Self` or `other`)'s timestamp is too far in the future (determined by `max_clock_drift`)
+    /// [`HLCError`] of kind [`ClockDrift`](HLCErrorKind::ClockDrift) if the latest [`HybridLogicalClock`]
+    /// (of `Self` or `other`)'s timestamp is too far in the future (determined by `max_clock_drift`)
     /// compared to [`SystemTime::now()`]
     pub fn update(
         &mut self,
@@ -102,11 +102,12 @@ impl HybridLogicalClock {
     /// Updates the [`HybridLogicalClock`] based on the current time
     ///
     /// # Errors
-    /// [`AIOProtocolError`] of kind [`InternalLogicError`](crate::common::aio_protocol_error::AIOProtocolErrorKind::InternalLogicError) if
-    /// the [`HybridLogicalClock`]'s counter would be incremented and overflow beyond [`u64::MAX`]
+    /// [`HLCError`] of kind [`OverflowWarning`](HLCErrorKind::OverflowWarning) if
+    /// the [`HybridLogicalClock`]'s counter would be set to a value that would overflow beyond [`u64::MAX`]
     ///
-    /// [`AIOProtocolError`] of kind [`StateInvalid`](crate::common::aio_protocol_error::AIOProtocolErrorKind::StateInvalid) if
-    /// the [`HybridLogicalClock`]'s timestamp is too far in the future (determined by `max_clock_drift`) compared to [`SystemTime::now()`]
+    /// [`HLCError`] of kind [`ClockDrift`](HLCErrorKind::ClockDrift) if the latest [`HybridLogicalClock`]
+    /// (of `Self` or `other`)'s timestamp is too far in the future (determined by `max_clock_drift`)
+    /// compared to [`SystemTime::now()`]
     pub fn update_now(&mut self, max_clock_drift: Duration) -> Result<(), HLCError> {
         let now = now_ms_precision();
 
@@ -125,11 +126,12 @@ impl HybridLogicalClock {
     /// and that the counter will not overflow if it is increased.
     ///
     /// # Errors
-    /// [`AIOProtocolError`] of kind [`InternalLogicError`](crate::common::aio_protocol_error::AIOProtocolErrorKind::InternalLogicError)
-    /// if the [`HybridLogicalClock`] counter is at [`u64::MAX`]
+    /// [`HLCError`] of kind [`OverflowWarning`](HLCErrorKind::OverflowWarning) if
+    /// the [`HybridLogicalClock`]'s counter would be set to a value that would overflow beyond [`u64::MAX`]
     ///
-    /// [`AIOProtocolError`] of kind [`StateInvalid`](crate::common::aio_protocol_error::AIOProtocolErrorKind::StateInvalid)
-    /// if the [`HybridLogicalClock`]'s timestamp is too far in the future (determined by `max_clock_drift`)
+    /// [`HLCError`] of kind [`ClockDrift`](HLCErrorKind::ClockDrift) if the latest [`HybridLogicalClock`]
+    /// (of `Self` or `other`)'s timestamp is too far in the future (determined by `max_clock_drift`)
+    /// compared to [`SystemTime::now()`]
     fn validate(&self, now: SystemTime, max_clock_drift: Duration) -> Result<(), HLCError> {
         if self.counter == u64::MAX {
             return Err(HLCErrorKind::OverflowWarning)?;
