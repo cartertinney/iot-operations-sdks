@@ -760,37 +760,37 @@ impl From<ParseHLCError> for AIOProtocolError {
 }
 
 
-impl From<TelemetryError> for AIOProtocolError {
-    fn from(error: TelemetryError) -> Self {
-        match error.kind() {
-            TelemetryErrorKind::PayloadInvalid => AIOProtocolError::new_payload_invalid_error(
-                error.is_shallow(),
-                false,
-                error.source(),
-                None,
-                Some(format!("{error}")),
-                None,
-            ),
-        }
+// impl From<TelemetryError> for AIOProtocolError {
+//     fn from(error: TelemetryError) -> Self {
+//         match error.kind() {
+//             TelemetryErrorKind::PayloadInvalid => AIOProtocolError::new_payload_invalid_error(
+//                 error.is_shallow(),
+//                 false,
+//                 error.source(),
+//                 None,
+//                 Some(format!("{error}")),
+//                 None,
+//             ),
+//         }
 
-        // match error.kind() {
-        //     TelemetryErrorKind::ClientError => AIOProtocolError::new_mqtt_error(
-        //         Some(format!("{error}")),
-        //         Box::new(error),
-        //         None,
-        //     ),
-        //     TelemetryErrorKind::MqttError => AIOProtocolError::new_mqtt_error(
-        //         Some(format!("{error}")),
-        //         Box::new(error),
-        //         None,
-        //     ),
-        //     TelemetryErrorKind::UnknownError => AIOProtocolError::new_unknown_error(
-        //         false,
-        //         false,
-        //         Some(Box::new(error)),
-        //         None,
-        //     ),
-        //     _ => AIOProtocolError::new_unknown_error(false, false, Some(Box::new(error)), None),
-        // }
-    }
-}
+//         // match error.kind() {
+//         //     TelemetryErrorKind::ClientError => AIOProtocolError::new_mqtt_error(
+//         //         Some(format!("{error}")),
+//         //         Box::new(error),
+//         //         None,
+//         //     ),
+//         //     TelemetryErrorKind::MqttError => AIOProtocolError::new_mqtt_error(
+//         //         Some(format!("{error}")),
+//         //         Box::new(error),
+//         //         None,
+//         //     ),
+//         //     TelemetryErrorKind::UnknownError => AIOProtocolError::new_unknown_error(
+//         //         false,
+//         //         false,
+//         //         Some(Box::new(error)),
+//         //         None,
+//         //     ),
+//         //     _ => AIOProtocolError::new_unknown_error(false, false, Some(Box::new(error)), None),
+//         // }
+//     }
+// }
