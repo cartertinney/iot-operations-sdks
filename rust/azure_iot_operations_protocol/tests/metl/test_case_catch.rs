@@ -7,8 +7,6 @@ use azure_iot_operations_protocol::common::aio_protocol_error::AIOProtocolErrorK
 use azure_iot_operations_protocol::telemetry::{TelemetryError, TelemetryErrorKind};
 use serde::Deserialize;
 
-use crate::metl::optional_field::deserialize_optional_field;
-
 pub const HEADER_NAME_KEY: &str = "header-name";
 pub const HEADER_VALUE_KEY: &str = "header-value";
 pub const TIMEOUT_NAME_KEY: &str = "timeout-name";
@@ -23,20 +21,11 @@ pub struct TestCaseCatch {
     #[serde(rename = "error-kind")]
     pub error_kind: String,
 
-    #[serde(rename = "in-application")]
-    pub in_application: Option<bool>,
-
     #[serde(rename = "is-shallow")]
     pub is_shallow: Option<bool>,
 
     #[serde(rename = "is-remote")]
     pub is_remote: Option<bool>,
-
-    #[serde(rename = "status-code")]
-    #[serde(default)]
-    #[serde(deserialize_with = "deserialize_optional_field")]
-    #[allow(clippy::option_option)]
-    pub status_code: Option<Option<u16>>,
 
     #[serde(rename = "message")]
     pub message: Option<String>,
@@ -81,14 +70,12 @@ impl TestCaseCatch {
             "timeout" => AIOProtocolErrorKind::Timeout,
             "cancellation" => AIOProtocolErrorKind::Cancellation,
             "invalid configuration" => AIOProtocolErrorKind::ConfigurationInvalid,
-            "invalid argument" => AIOProtocolErrorKind::ArgumentInvalid,
             "invalid state" => AIOProtocolErrorKind::StateInvalid,
             "internal logic error" => AIOProtocolErrorKind::InternalLogicError,
             "unknown error" => AIOProtocolErrorKind::UnknownError,
             "execution error" => AIOProtocolErrorKind::ExecutionException,
             "mqtt error" => AIOProtocolErrorKind::ClientError,
-            "request version not supported" => AIOProtocolErrorKind::UnsupportedRequestVersion,
-            "response version not supported" => AIOProtocolErrorKind::UnsupportedResponseVersion,
+            "unsupported version" => AIOProtocolErrorKind::UnsupportedVersion,
             _ => panic!("Unrecognized error kind"),
         }
     }
