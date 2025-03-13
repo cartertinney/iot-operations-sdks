@@ -147,12 +147,15 @@ pub enum Value {
 
 /// Represents an error reported by a remote executor
 #[derive(thiserror::Error, Debug)]
-#[error("Remote Error status code: {http_status_code:?}")]
+#[error("Remote Error status code: {status:?}")]
 pub struct RemoteError {
-    /// The message received with the error
-    message: Option<String>,
-    
-
     /// Status code received from a remote service that caused the error
-    http_status_code: Option<u16>,
+    status_code: Option<u16>,
+    /// The message received with the error
+    status_message: Option<String>,
+    is_application_error: bool,
+    protocol_version: Option<String>,
+    supported_protocol_major_versions: Option<Vec<u16>>,
 }
+
+
