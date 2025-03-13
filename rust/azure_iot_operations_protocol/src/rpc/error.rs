@@ -149,6 +149,10 @@ pub enum Value {
 #[derive(thiserror::Error, Debug)]
 #[error("Remote Error status code: {http_status_code:?}")]
 pub struct RemoteError {
+    /// The message received with the error
+    message: Option<String>,
+    
+
     /// Status code received from a remote service that caused the error
     http_status_code: Option<u16>,
 }
