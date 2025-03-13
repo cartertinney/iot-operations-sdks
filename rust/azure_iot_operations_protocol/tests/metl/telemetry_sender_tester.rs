@@ -9,19 +9,16 @@ use std::sync::Arc;
 use async_std::future;
 use azure_iot_operations_mqtt::interface::ManagedClient;
 use azure_iot_operations_protocol::application::ApplicationContextBuilder;
-use azure_iot_operations_protocol::common::aio_protocol_error::{
-    AIOProtocolError, AIOProtocolErrorKind,
-};
 use azure_iot_operations_protocol::telemetry::telemetry_sender::{
     CloudEventBuilder, CloudEventBuilderError, CloudEventSubject, TelemetryMessageBuilder,
     TelemetryMessageBuilderError, TelemetrySender, TelemetrySenderOptionsBuilder,
     TelemetrySenderOptionsBuilderError,
 };
+use azure_iot_operations_protocol::telemetry::{TelemetryError, TelemetryErrorKind, Value};
 use chrono::{DateTime, Utc};
 use tokio::sync::oneshot;
 use tokio::time;
 
-use crate::metl::aio_protocol_error_checker;
 use crate::metl::defaults::{get_sender_defaults, SenderDefaults};
 use crate::metl::mqtt_hub::MqttHub;
 use crate::metl::qos;
@@ -35,7 +32,7 @@ use crate::metl::test_payload::TestPayload;
 
 const TEST_TIMEOUT: time::Duration = time::Duration::from_secs(10);
 
-type SendResultReceiver = oneshot::Receiver<Result<(), AIOProtocolError>>;
+type SendResultReceiver = oneshot::Receiver<Result<(), TelemetryError>>;
 
 pub struct TelemetrySenderTester<C>
 where
@@ -184,10 +181,7 @@ where
         let options_result = sender_options_builder.build();
         if let Err(error) = options_result {
             if let Some(catch) = catch {
-                aio_protocol_error_checker::check_error(
-                    catch,
-                    &Self::from_sender_options_builder_error(error),
-                );
+                catch.check_telemetry_error(&Self::from_sender_options_builder_error(error));
             } else {
                 panic!("Unexpected error when building TelemetrySender options: {error}");
             }
@@ -250,7 +244,7 @@ where
                             );
                         }
                         Ok(Err(error)) => {
-                            aio_protocol_error_checker::check_error(catch, &error);
+                            catch.check_telemetry_error(&error);
                         }
                         _ => {
                             panic!(
@@ -266,7 +260,7 @@ where
             }
             Err(error) => {
                 if let Some(catch) = catch {
-                    aio_protocol_error_checker::check_error(catch, &error);
+                    catch.check_telemetry_error(&error);
                     None
                 } else {
                     panic!("Unexpected error when constructing TelemetrySender: {error}");
@@ -431,7 +425,7 @@ where
                 }
                 Ok(Err(error)) => {
                     if let Some(catch) = catch {
-                        aio_protocol_error_checker::check_error(catch, &error);
+                        catch.check_telemetry_error(&error);
                     } else {
                         panic!("Unexpected error when awaiting send: {error}");
                     }
@@ -587,90 +581,154 @@ where
 
     fn from_sender_options_builder_error(
         builder_error: TelemetrySenderOptionsBuilderError,
-    ) -> AIOProtocolError {
+    ) -> TelemetryError {
         let property_name = match builder_error {
             TelemetrySenderOptionsBuilderError::UninitializedField(field_name) => {
-                Some(field_name.to_string())
+                field_name.to_string()
             }
-            _ => None,
+            _ => "unknown".to_string(),
         };
 
-        let mut protocol_error = AIOProtocolError {
-            message: None,
-            kind: AIOProtocolErrorKind::ConfigurationInvalid,
-            is_shallow: true,
-            is_remote: false,
-            nested_error: Some(Box::new(builder_error)),
-            header_name: None,
-            header_value: None,
-            timeout_name: None,
-            timeout_value: None,
-            property_name,
-            property_value: None,
-            command_name: None,
-            protocol_version: None,
-            supported_protocol_major_versions: None,
-        };
+        TelemetryError::new(
+            TelemetryErrorKind::ConfigurationInvalid {
+                property_name,
+                property_value: Value::String("uninitialized".to_string()),
+            },
+            builder_error,
+            true,
+        )
 
-        protocol_error.ensure_error_message();
-        protocol_error
+        // let property_name = match builder_error {
+        //     TelemetrySenderOptionsBuilderError::UninitializedField(field_name) => {
+        //         Some(field_name.to_string())
+        //     }
+        //     _ => None,
+        // };
+
+        // let mut protocol_error = AIOProtocolError {
+        //     message: None,
+        //     kind: AIOProtocolErrorKind::ConfigurationInvalid,
+        //     is_shallow: true,
+        //     is_remote: false,
+        //     nested_error: Some(Box::new(builder_error)),
+        //     header_name: None,
+        //     header_value: None,
+        //     timeout_name: None,
+        //     timeout_value: None,
+        //     property_name,
+        //     property_value: None,
+        //     command_name: None,
+        //     protocol_version: None,
+        //     supported_protocol_major_versions: None,
+        // };
+
+        // protocol_error.ensure_error_message();
+        // protocol_error
     }
 
-    fn from_cloud_event_builder_error(builder_error: CloudEventBuilderError) -> AIOProtocolError {
+    fn from_cloud_event_builder_error(builder_error: CloudEventBuilderError) -> TelemetryError {
         let property_name = match builder_error {
-            CloudEventBuilderError::UninitializedField(field_name) => Some(field_name.to_string()),
-            _ => Some("cloud_event".to_string()),
+            CloudEventBuilderError::UninitializedField(field_name) => field_name.to_string(),
+            _ => "cloud_event".to_string(),
         };
 
-        let mut protocol_error = AIOProtocolError {
-            message: None,
-            kind: AIOProtocolErrorKind::ConfigurationInvalid,
-            is_shallow: true,
-            is_remote: false,
-            nested_error: Some(Box::new(builder_error)),
-            header_name: None,
-            header_value: None,
-            timeout_name: None,
-            timeout_value: None,
-            property_name,
-            property_value: None,
-            command_name: None,
-            protocol_version: None,
-            supported_protocol_major_versions: None,
-        };
+        TelemetryError::new(
+            TelemetryErrorKind::ConfigurationInvalid {
+                property_name,
+                property_value: Value::String("uninitialized".to_string()),
+            },
+            builder_error,
+            true,
+        )
 
-        protocol_error.ensure_error_message();
-        protocol_error
+        // let property_name = match builder_error {
+        //     CloudEventBuilderError::UninitializedField(field_name) => Some(field_name.to_string()),
+        //     _ => Some("cloud_event".to_string()),
+        // };
+
+        // let mut protocol_error = AIOProtocolError {
+        //     message: None,
+        //     kind: AIOProtocolErrorKind::ConfigurationInvalid,
+        //     is_shallow: true,
+        //     is_remote: false,
+        //     nested_error: Some(Box::new(builder_error)),
+        //     header_name: None,
+        //     header_value: None,
+        //     timeout_name: None,
+        //     timeout_value: None,
+        //     property_name,
+        //     property_value: None,
+        //     command_name: None,
+        //     protocol_version: None,
+        //     supported_protocol_major_versions: None,
+        // };
+
+        // protocol_error.ensure_error_message();
+        // protocol_error
     }
 
     fn from_telemetry_message_builder_error(
         builder_error: TelemetryMessageBuilderError,
-    ) -> AIOProtocolError {
+    ) -> TelemetryError {
         let property_name = match builder_error {
-            TelemetryMessageBuilderError::UninitializedField(field_name) => {
-                Some(field_name.to_string())
-            }
-            _ => None,
+            TelemetryMessageBuilderError::UninitializedField(field_name) => field_name.to_string(),
+            _ => "unknown".to_string(),
         };
 
-        let mut protocol_error = AIOProtocolError {
-            message: None,
-            kind: AIOProtocolErrorKind::ConfigurationInvalid,
-            is_shallow: true,
-            is_remote: false,
-            nested_error: Some(Box::new(builder_error)),
-            header_name: None,
-            header_value: None,
-            timeout_name: None,
-            timeout_value: None,
-            property_name,
-            property_value: None,
-            command_name: None,
-            protocol_version: None,
-            supported_protocol_major_versions: None,
-        };
+        TelemetryError::new(
+            TelemetryErrorKind::ConfigurationInvalid {
+                property_name,
+                property_value: Value::String("uninitialized".to_string()),
+            },
+            builder_error,
+            true,
+        )
 
-        protocol_error.ensure_error_message();
-        protocol_error
+        // let mut protocol_error = AIOProtocolError {
+        //     message: None,
+        //     kind: AIOProtocolErrorKind::ConfigurationInvalid,
+        //     is_shallow: true,
+        //     is_remote: false,
+        //     nested_error: Some(Box::new(builder_error)),
+        //     header_name: None,
+        //     header_value: None,
+        //     timeout_name: None,
+        //     timeout_value: None,
+        //     property_name,
+        //     property_value: None,
+        //     command_name: None,
+        //     protocol_version: None,
+        //     supported_protocol_major_versions: None,
+        // };
+
+        // protocol_error.ensure_error_message();
+        // protocol_error
+
+        // let property_name = match builder_error {
+        //     TelemetryMessageBuilderError::UninitializedField(field_name) => {
+        //         Some(field_name.to_string())
+        //     }
+        //     _ => None,
+        // };
+
+        // let mut protocol_error = AIOProtocolError {
+        //     message: None,
+        //     kind: AIOProtocolErrorKind::ConfigurationInvalid,
+        //     is_shallow: true,
+        //     is_remote: false,
+        //     nested_error: Some(Box::new(builder_error)),
+        //     header_name: None,
+        //     header_value: None,
+        //     timeout_name: None,
+        //     timeout_value: None,
+        //     property_name,
+        //     property_value: None,
+        //     command_name: None,
+        //     protocol_version: None,
+        //     supported_protocol_major_versions: None,
+        // };
+
+        // protocol_error.ensure_error_message();
+        // protocol_error
     }
 }

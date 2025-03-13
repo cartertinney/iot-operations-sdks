@@ -16,7 +16,7 @@ pub mod cloud_event;
 /// This module contains the error type for Telemetry operations
 mod error;
 
-pub use error::{TelemetryError, TelemetryErrorKind};
+pub use error::{TelemetryError, TelemetryErrorKind, Value};
 
 /// Protocol version used by all envoys in this module
 pub(crate) const TELEMETRY_PROTOCOL_VERSION: ProtocolVersion =

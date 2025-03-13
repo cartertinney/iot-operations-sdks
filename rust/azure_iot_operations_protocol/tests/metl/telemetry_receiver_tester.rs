@@ -299,7 +299,7 @@ where
                             );
                         }
                         Ok(Some(Err(error))) => {
-                            aio_protocol_error_checker::check_error(catch, &error);
+                            catch.check_telemetry_error(&error);
                         }
                         _ => {
                             panic!(
@@ -314,7 +314,7 @@ where
             }
             Err(error) => {
                 if let Some(catch) = catch {
-                    aio_protocol_error_checker::check_error(catch, &error);
+                    catch.check_telemetry_error(&error);
                     None
                 } else {
                     panic!("Unexpected error when constructing TelemetryReceiver: {error}");

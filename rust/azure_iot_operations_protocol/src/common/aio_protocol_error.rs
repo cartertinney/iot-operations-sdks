@@ -7,7 +7,6 @@ use std::time::Duration;
 
 use crate::common::hybrid_logical_clock::{HLCError, HLCErrorKind, ParseHLCError};
 use crate::common::topic_processor::{TopicPatternError, TopicPatternErrorKind};
-use crate::telemetry::{TelemetryError, TelemetryErrorKind};
 
 /// Represents the kind of error that occurs in an Azure IoT Operations Protocol
 #[derive(Debug, PartialEq)]
@@ -578,27 +577,23 @@ impl AIOProtocolError {
 
 impl From<HLCError> for AIOProtocolError {
     fn from(error: HLCError) -> Self {
-        match error.kind() {
-            HLCErrorKind::OverflowWarning => AIOProtocolError::new_internal_logic_error(
-                true,
-                false,
-                None,
-                None,
-                "Counter",
-                None,
-                Some("Integer overflow on HybridLogicalClock counter".to_string()),
-                None,
-            ),
-            HLCErrorKind::ClockDrift => AIOProtocolError::new_state_invalid_error(
+        //AIOProtocolError::new_state_invalid_error(property_name, property_value, message, command_name)
+        let (property_name, message) = match error.kind() {
+            HLCErrorKind::OverflowWarning => {
+                ("Counter", "Integer overflow on HybridLogicalClock counter")
+            }
+            HLCErrorKind::ClockDrift => (
                 "MaxClockDrift",
-                None,
-                Some(
-                    "HybridLogicalClock drift is greater than the maximum allowed drift"
-                        .to_string(),
-                ),
-                None,
+                "HybridLogicalClock drift is greater than the maximum allowed drift",
             ),
-        }
+        };
+
+        AIOProtocolError::new_state_invalid_error(
+            property_name,
+            None,
+            Some(message.to_string()),
+            None,
+        )
     }
 }
 
@@ -608,45 +603,8 @@ impl From<ParseHLCError> for AIOProtocolError {
             "HybridLogicalClock",
             error.input.as_str(),
             false,
-            None,
             Some(format!("{error}")),
             None,
         )
     }
 }
-
-
-// impl From<TelemetryError> for AIOProtocolError {
-//     fn from(error: TelemetryError) -> Self {
-//         match error.kind() {
-//             TelemetryErrorKind::PayloadInvalid => AIOProtocolError::new_payload_invalid_error(
-//                 error.is_shallow(),
-//                 false,
-//                 error.source(),
-//                 None,
-//                 Some(format!("{error}")),
-//                 None,
-//             ),
-//         }
-
-//         // match error.kind() {
-//         //     TelemetryErrorKind::ClientError => AIOProtocolError::new_mqtt_error(
-//         //         Some(format!("{error}")),
-//         //         Box::new(error),
-//         //         None,
-//         //     ),
-//         //     TelemetryErrorKind::MqttError => AIOProtocolError::new_mqtt_error(
-//         //         Some(format!("{error}")),
-//         //         Box::new(error),
-//         //         None,
-//         //     ),
-//         //     TelemetryErrorKind::UnknownError => AIOProtocolError::new_unknown_error(
-//         //         false,
-//         //         false,
-//         //         Some(Box::new(error)),
-//         //         None,
-//         //     ),
-//         //     _ => AIOProtocolError::new_unknown_error(false, false, Some(Box::new(error)), None),
-//         // }
-//     }
-// }
