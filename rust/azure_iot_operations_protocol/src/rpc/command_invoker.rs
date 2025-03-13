@@ -16,11 +16,12 @@ use tokio::{
 };
 use uuid::Uuid;
 
+use crate::common::topic_processor::TopicPatternErrorKind;
 use crate::common::user_properties::{validate_invoker_user_properties, PARTITION_KEY};
 use crate::{
     application::{ApplicationContext, ApplicationHybridLogicalClock},
     common::{
-        aio_protocol_error::{AIOProtocolError, AIOProtocolErrorKind, Value},
+        //aio_protocol_error::{AIOProtocolError, AIOProtocolErrorKind, Value},
         hybrid_logical_clock::HybridLogicalClock,
         is_invalid_utf8,
         payload_serialize::{
@@ -30,6 +31,7 @@ use crate::{
         user_properties::UserProperty,
     },
     parse_supported_protocol_major_versions,
+    rpc::error::{RPCError, RPCErrorKind, Value},
     rpc::{StatusCode, DEFAULT_RPC_PROTOCOL_VERSION, RPC_PROTOCOL_VERSION},
     ProtocolVersion,
 };
@@ -278,17 +280,19 @@ where
         application_context: ApplicationContext,
         client: C,
         invoker_options: CommandInvokerOptions,
-    ) -> Result<Self, AIOProtocolError> {
+    ) -> Result<Self, RPCError> {
         // Validate function parameters. request_topic_pattern will be validated by topic parser
         if invoker_options.command_name.is_empty()
             || contains_invalid_char(&invoker_options.command_name)
         {
-            return Err(AIOProtocolError::new_configuration_invalid_error(
+            return Err(RPCError::new(
+                RPCErrorKind::ConfigurationInvalid {
+                    property_name: "command_name".to_string(),
+                    property_value:  Value::String(invoker_options.command_name.clone()),
+                },
                 None,
-                "command_name",
-                Value::String(invoker_options.command_name.clone()),
-                None,
-                Some(invoker_options.command_name),
+                true,
+                invoker_options.command_name.clone(),
             ));
         }
 
@@ -330,9 +334,31 @@ where
             &invoker_options.topic_token_map,
         )
         .map_err(|e| {
-            AIOProtocolError::config_invalid_from_topic_pattern_error(
-                e,
-                "invoker_options.request_topic_pattern",
+            let (property_name, property_value) = match e.kind() {
+                TopicPatternErrorKind::InvalidPattern(pattern) => (
+                    "invoker_options.request_topic_pattern".to_string(),
+                    Value::String(pattern.to_string()),
+                ),
+                TopicPatternErrorKind::InvalidShareName(share_name) => (
+                    "share_name".to_string(),
+                    Value::String(share_name.to_string()),
+                ),
+                TopicPatternErrorKind::InvalidNamespace(namespace) => (
+                    "topic_namespace".to_string(),
+                    Value::String(namespace.to_string()),
+                ),
+                TopicPatternErrorKind::InvalidTokenReplacement(token, replacement) => {
+                    (token.to_string(), Value::String(replacement.to_string()))
+                }
+            };
+            RPCError::new(
+                RPCErrorKind::ConfigurationInvalid {
+                    property_name,
+                    property_value,
+                },
+                Some(e),
+                true,
+                invoker_options.command_name.clone(),
             )
         })?;
 
@@ -343,7 +369,32 @@ where
             &invoker_options.topic_token_map,
         )
         .map_err(|e| {
-            AIOProtocolError::config_invalid_from_topic_pattern_error(e, "response_topic_pattern")
+            let (property_name, property_value) = match e.kind() {
+                TopicPatternErrorKind::InvalidPattern(pattern) => (
+                    "response_topic_pattern".to_string(),
+                    Value::String(pattern.to_string()),
+                ),
+                TopicPatternErrorKind::InvalidShareName(share_name) => (
+                    "share_name".to_string(),
+                    Value::String(share_name.to_string()),
+                ),
+                TopicPatternErrorKind::InvalidNamespace(namespace) => (
+                    "topic_namespace".to_string(),
+                    Value::String(namespace.to_string()),
+                ),
+                TopicPatternErrorKind::InvalidTokenReplacement(token, replacement) => {
+                    (token.to_string(), Value::String(replacement.to_string()))
+                }
+            };
+            RPCError::new(
+                RPCErrorKind::ConfigurationInvalid {
+                    property_name,
+                    property_value,
+                },
+                Some(e),
+                true,
+                invoker_options.command_name.clone(),
+            )
         })?;
 
         // Create mutex to track invoker state
@@ -355,13 +406,15 @@ where
         {
             Ok(receiver) => receiver,
             Err(e) => {
-                return Err(AIOProtocolError::new_configuration_invalid_error(
-                    Some(Box::new(e)),
-                    "response_topic_pattern",
-                    Value::String(response_topic_pattern.as_subscribe_topic()),
-                    Some("Could not parse response topic pattern".to_string()),
-                    Some(invoker_options.command_name),
-                ));
+                return Err(RPCError::new(
+                    RPCErrorKind::ConfigurationInvalid {
+                        property_name: "response_topic_pattern".to_string(),
+                        property_value: Value::String(response_topic_pattern.as_subscribe_topic())
+                    },
+                    Some(e),
+                    true,
+                    invoker_options.command_name.clone(),
+                ))
             }
         };
 
@@ -455,7 +508,7 @@ where
     pub async fn invoke(
         &self,
         request: CommandRequest<TReq>,
-    ) -> Result<CommandResponse<TResp>, AIOProtocolError> {
+    ) -> Result<CommandResponse<TResp>, RPCError> {
         // Get the timeout duration to use
         let command_timeout = request.timeout;
 
@@ -473,13 +526,14 @@ where
                     "[{command_name}] Command invoke timed out after {command_timeout:?}",
                     command_name = self.command_name,
                 );
-                Err(AIOProtocolError::new_timeout_error(
+                Err(RPCError::new(
+                    RPCErrorKind::Timeout {
+                        timeout_name: self.command_name.clone(),
+                        timeout_value: command_timeout,
+                    },
+                    Some(e),
                     false,
-                    Some(Box::new(e)),
-                    &self.command_name,
-                    command_timeout,
-                    None,
-                    Some(self.command_name.clone()),
+                    self.command_name.clone(),
                 ))
             }
         }
@@ -490,7 +544,7 @@ where
     /// Returns `Ok()` on success, otherwise returns [`AIOProtocolError`].
     /// # Errors
     /// [`AIOProtocolError`] of kind [`ClientError`](AIOProtocolErrorKind::ClientError) if the subscribe fails or if the suback reason code doesn't indicate success.
-    async fn subscribe_to_response_filter(&self) -> Result<(), AIOProtocolError> {
+    async fn subscribe_to_response_filter(&self) -> Result<(), RPCError> {
         let response_subscribe_topic = self.response_topic_pattern.as_subscribe_topic();
         // Send subscribe
         let subscribe_result = self
@@ -504,21 +558,23 @@ where
                     Ok(()) => { /* Success */ }
                     Err(e) => {
                         log::error!("[ERROR] suback error: {e}");
-                        return Err(AIOProtocolError::new_mqtt_error(
-                            Some("MQTT Error on command invoker suback".to_string()),
-                            Box::new(e),
-                            Some(self.command_name.clone()),
-                        ));
+                        return Err(RPCError::new(
+                            RPCErrorKind::MqttError,
+                            Some(e),
+                            false,
+                            self.command_name.clone(),
+                        ))
                     }
                 }
             }
             Err(e) => {
                 log::error!("[ERROR] client error while subscribing: {e}");
-                return Err(AIOProtocolError::new_mqtt_error(
-                    Some("Client error on command invoker subscribe".to_string()),
-                    Box::new(e),
-                    Some(self.command_name.clone()),
-                ));
+                return Err(RPCError::new(
+                    RPCErrorKind::UnknownError,
+                    Some(e),
+                    true,
+                    self.command_name.clone(),
+                ))
             }
         }
         Ok(())
@@ -527,7 +583,7 @@ where
     async fn invoke_internal(
         &self,
         mut request: CommandRequest<TReq>,
-    ) -> Result<CommandResponse<TResp>, AIOProtocolError> {
+    ) -> Result<CommandResponse<TResp>, RPCError> {
         // Validate parameters. Custom user data, timeout, and payload serialization have already been validated in CommandRequestBuilder
         // Validate message expiry interval
         let message_expiry_interval: u32 = match request.timeout.as_secs().try_into() {
@@ -543,9 +599,20 @@ where
             .request_topic_pattern
             .as_publish_topic(&request.topic_tokens)
             .map_err(|e| {
-                AIOProtocolError::config_invalid_from_topic_pattern_error(
-                    e,
-                    "request_topic_pattern",
+                let (property_name, property_value) = match e.kind() {
+                    TopicPatternErrorKind::InvalidTokenReplacement(token, replacement) => {
+                        (token.to_string(), Value::String(replacement.to_string()))
+                    }
+                    _ => unreachable!("`.as_publish_topic()` can only return InvalidTokenReplacement kind"),
+                };
+                RPCError::new(
+                    RPCErrorKind::ConfigurationInvalid {
+                        property_name,
+                        property_value,
+                    },
+                    Some(e),
+                    true,
+                    self.command_name.clone(),
                 )
             })?;
         // Get response topic. Validates dynamic topic tokens
@@ -553,9 +620,20 @@ where
             .response_topic_pattern
             .as_publish_topic(&request.topic_tokens)
             .map_err(|e| {
-                AIOProtocolError::config_invalid_from_topic_pattern_error(
-                    e,
-                    "response_topic_pattern",
+                let (property_name, property_value) = match e.kind() {
+                    TopicPatternErrorKind::InvalidTokenReplacement(token, replacement) => {
+                        (token.to_string(), Value::String(replacement.to_string()))
+                    }
+                    _ => unreachable!("`.as_publish_topic()` can only return InvalidTokenReplacement kind"),
+                };
+                RPCError::new(
+                    RPCErrorKind::ConfigurationInvalid {
+                        property_name,
+                        property_value,
+                    },
+                    Some(e),
+                    true,
+                    self.command_name.clone(),
                 )
             })?;
 
@@ -606,15 +684,13 @@ where
                 CommandInvokerState::Subscribed => { /* No-op, already subscribed */ }
                 CommandInvokerState::ShutdownInitiated
                 | CommandInvokerState::ShutdownSuccessful => {
-                    return Err(AIOProtocolError::new_cancellation_error(
-                        false,
+                    log::error!("Command Invoker has been shut down and can no longer invoke commands");
+                    return Err(RPCError::new(
+                        RPCErrorKind::Cancellation,
                         None,
-                        Some(
-                            "Command Invoker has been shutdown and can no longer invoke commands"
-                                .to_string(),
-                        ),
-                        Some(self.command_name.clone()),
-                    ));
+                        true,      // TODO: this was originally false
+                        self.command_name.clone(),
+                    ))
                 }
             }
             // Allow other concurrent invoke commands to acquire the invoker_state lock
@@ -643,20 +719,22 @@ where
                     Ok(()) => {}
                     Err(e) => {
                         log::error!("[ERROR] puback error: {e}");
-                        return Err(AIOProtocolError::new_mqtt_error(
-                            Some("MQTT Error on command invoke puback".to_string()),
-                            Box::new(e),
-                            Some(self.command_name.clone()),
-                        ));
+                        return Err(RPCError::new(
+                            RPCErrorKind::MqttError,
+                            Some(e),
+                            false,
+                            self.command_name.clone(),
+                        ))
                     }
                 }
             }
             Err(e) => {
                 log::error!("[ERROR] client error while publishing: {e}");
-                return Err(AIOProtocolError::new_mqtt_error(
-                    Some("Client error on command invoker request publish".to_string()),
-                    Box::new(e),
-                    Some(self.command_name.clone()),
+                return Err(RPCError::new(
+                    RPCErrorKind::UnknownError,
+                    Some(e),
+                    true,
+                    self.command_name.clone(),
                 ));
             }
         }
@@ -686,14 +764,11 @@ where
                         }
                     } else {
                         log::error!("Command Invoker has been shutdown and will no longer receive a response");
-                        return Err(AIOProtocolError::new_cancellation_error(
-                            false,
+                        return Err(RPCError::new(
+                            RPCErrorKind::Cancellation,
                             None,
-                            Some(
-                                "Command Invoker has been shutdown and will no longer receive a response"
-                                    .to_string(),
-                            ),
-                            Some(self.command_name.clone()),
+                            false,
+                            self.command_name.clone(),
                         ));
                     }
 
@@ -706,15 +781,12 @@ where
                 }
                 Err(RecvError::Closed) => {
                     log::error!("[ERROR] MQTT Receiver has been cleaned up and will no longer send a response");
-                    return Err(AIOProtocolError::new_cancellation_error(
-                        false,
+                    return Err(RPCError::new(
+                        RPCErrorKind::Cancellation,
                         None,
-                        Some(
-                            "MQTT Receiver has been cleaned up and will no longer send a response"
-                                .to_string(),
-                        ),
-                        Some(self.command_name.clone()),
-                    ));
+                        false,
+                        self.command_name.clone(),
+                    ))
                 }
             }
         }
@@ -772,7 +844,7 @@ where
     /// Returns Ok(()) on success, otherwise returns [`AIOProtocolError`].
     /// # Errors
     /// [`AIOProtocolError`] of kind [`ClientError`](crate::common::aio_protocol_error::AIOProtocolErrorKind::ClientError) if the unsubscribe fails or if the unsuback reason code doesn't indicate success.
-    pub async fn shutdown(&self) -> Result<(), AIOProtocolError> {
+    pub async fn shutdown(&self) -> Result<(), RPCError> {
         // Notify the receiver loop to close the MQTT Receiver
         self.shutdown_notifier.notify_one();
 
@@ -795,11 +867,12 @@ where
                             Ok(()) => { /* Success */ }
                             Err(e) => {
                                 log::error!("[{}] Unsuback error: {e}", self.command_name);
-                                return Err(AIOProtocolError::new_mqtt_error(
-                                    Some("MQTT error on command invoker unsuback".to_string()),
-                                    Box::new(e),
-                                    Some(self.command_name.clone()),
-                                ));
+                                return Err(RPCError::new(
+                                    RPCErrorKind::MqttError,
+                                    Some(e),
+                                    false,
+                                    self.command_name.clone(),
+                                ))
                             }
                         }
                     }
@@ -808,11 +881,12 @@ where
                             "[{}] Client error while unsubscribing: {e}",
                             self.command_name
                         );
-                        return Err(AIOProtocolError::new_mqtt_error(
-                            Some("Client error on command invoker unsubscribe".to_string()),
-                            Box::new(e),
-                            Some(self.command_name.clone()),
-                        ));
+                        return Err(RPCError::new(
+                            RPCErrorKind::UnknownError,
+                            Some(e),
+                            true,
+                            self.command_name.clone(),
+                        ))
                     }
                 }
             }

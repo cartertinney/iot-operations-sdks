@@ -68,7 +68,6 @@ impl From<PublishError> for TelemetryError {
 impl From<SubscribeError> for TelemetryError {
     // TODO: Make this return a ClientError kind once spec supports it
     fn from(error: SubscribeError) -> Self {
-        //TelemetryError::new(TelemetryErrorKind::ClientError, error, true)
         TelemetryError::new(TelemetryErrorKind::UnknownError, error, true)
     }
 }
@@ -76,7 +75,6 @@ impl From<SubscribeError> for TelemetryError {
 impl From<UnsubscribeError> for TelemetryError {
     // TODO: Make this return a ClientError kind once spec supports it
     fn from(error: UnsubscribeError) -> Self {
-        //TelemetryError::new(TelemetryErrorKind::ClientError, error, true)
         TelemetryError::new(TelemetryErrorKind::UnknownError, error, true)
     }
 }

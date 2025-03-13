@@ -55,6 +55,10 @@ impl TestCaseCatch {
         }
     }
 
+    // pub fn check_rpc_error(&self, error: &RPCError) {
+
+    // }
+
     pub fn check_telemetry_error(&self, error: &TelemetryError) {
         // Kind + Kind Values
         match error.kind() {
