@@ -210,7 +210,7 @@ namespace Azure.Iot.Operations.Protocol.RPC
                     }
 
                     await GetDispatcher()(
-                        async () => { await GenerateAndPublishResponseAsync(commandExpirationTime, args.ApplicationMessage.ResponseTopic, args.ApplicationMessage.CorrelationData, statusCode, ex.Message, null, null, amex?.InApplication, amex?.HeaderName, amex?.HeaderValue, requestedProtocolVersion).ConfigureAwait(false); },
+                        async () => { await GenerateAndPublishResponseAsync(commandExpirationTime, args.ApplicationMessage.ResponseTopic, args.ApplicationMessage.CorrelationData, statusCode, ex.Message, null, null, false, amex?.HeaderName, amex?.HeaderValue, requestedProtocolVersion).ConfigureAwait(false); },
                         async () => { await args.AcknowledgeAsync(CancellationToken.None).ConfigureAwait(false); }).ConfigureAwait(false);
 
                     return;
@@ -261,14 +261,6 @@ namespace Azure.Iot.Operations.Protocol.RPC
                                 invalidPropertyName = nameof(ExecutionTimeout);
                                 invalidPropertyValue = XmlConvert.ToString(ExecutionTimeout);
                                 Trace.TraceWarning($"Command '{_commandName}' execution timed out after {cancellationTimeout.TotalSeconds} seconds.");
-                                break;
-                            case InvocationException iex:
-                                statusCode = CommandStatusCode.UnprocessableContent;
-                                statusMessage = iex.Message;
-                                isAppError = true;
-                                invalidPropertyName = iex.InvalidPropertyName;
-                                invalidPropertyValue = iex.InvalidPropertyValue;
-                                Trace.TraceWarning($"Command '{_commandName}' execution failed due to an invocation error: {iex}.");
                                 break;
                             case AkriMqttException amex:
                                 statusCode = CommandStatusCode.InternalServerError;
@@ -664,7 +656,6 @@ namespace Azure.Iot.Operations.Protocol.RPC
                 AkriMqttErrorKind.StateInvalid => CommandStatusCode.ServiceUnavailable,
                 AkriMqttErrorKind.InternalLogicError => CommandStatusCode.InternalServerError,
                 AkriMqttErrorKind.Timeout => CommandStatusCode.RequestTimeout,
-                AkriMqttErrorKind.InvocationException => CommandStatusCode.UnprocessableContent,
                 AkriMqttErrorKind.ExecutionException => CommandStatusCode.InternalServerError,
                 AkriMqttErrorKind.UnknownError => CommandStatusCode.InternalServerError,
                 _ => CommandStatusCode.InternalServerError,
