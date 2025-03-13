@@ -597,33 +597,6 @@ where
             builder_error,
             true,
         )
-
-        // let property_name = match builder_error {
-        //     TelemetrySenderOptionsBuilderError::UninitializedField(field_name) => {
-        //         Some(field_name.to_string())
-        //     }
-        //     _ => None,
-        // };
-
-        // let mut protocol_error = AIOProtocolError {
-        //     message: None,
-        //     kind: AIOProtocolErrorKind::ConfigurationInvalid,
-        //     is_shallow: true,
-        //     is_remote: false,
-        //     nested_error: Some(Box::new(builder_error)),
-        //     header_name: None,
-        //     header_value: None,
-        //     timeout_name: None,
-        //     timeout_value: None,
-        //     property_name,
-        //     property_value: None,
-        //     command_name: None,
-        //     protocol_version: None,
-        //     supported_protocol_major_versions: None,
-        // };
-
-        // protocol_error.ensure_error_message();
-        // protocol_error
     }
 
     fn from_cloud_event_builder_error(builder_error: CloudEventBuilderError) -> TelemetryError {
@@ -640,31 +613,6 @@ where
             builder_error,
             true,
         )
-
-        // let property_name = match builder_error {
-        //     CloudEventBuilderError::UninitializedField(field_name) => Some(field_name.to_string()),
-        //     _ => Some("cloud_event".to_string()),
-        // };
-
-        // let mut protocol_error = AIOProtocolError {
-        //     message: None,
-        //     kind: AIOProtocolErrorKind::ConfigurationInvalid,
-        //     is_shallow: true,
-        //     is_remote: false,
-        //     nested_error: Some(Box::new(builder_error)),
-        //     header_name: None,
-        //     header_value: None,
-        //     timeout_name: None,
-        //     timeout_value: None,
-        //     property_name,
-        //     property_value: None,
-        //     command_name: None,
-        //     protocol_version: None,
-        //     supported_protocol_major_versions: None,
-        // };
-
-        // protocol_error.ensure_error_message();
-        // protocol_error
     }
 
     fn from_telemetry_message_builder_error(
@@ -683,52 +631,5 @@ where
             builder_error,
             true,
         )
-
-        // let mut protocol_error = AIOProtocolError {
-        //     message: None,
-        //     kind: AIOProtocolErrorKind::ConfigurationInvalid,
-        //     is_shallow: true,
-        //     is_remote: false,
-        //     nested_error: Some(Box::new(builder_error)),
-        //     header_name: None,
-        //     header_value: None,
-        //     timeout_name: None,
-        //     timeout_value: None,
-        //     property_name,
-        //     property_value: None,
-        //     command_name: None,
-        //     protocol_version: None,
-        //     supported_protocol_major_versions: None,
-        // };
-
-        // protocol_error.ensure_error_message();
-        // protocol_error
-
-        // let property_name = match builder_error {
-        //     TelemetryMessageBuilderError::UninitializedField(field_name) => {
-        //         Some(field_name.to_string())
-        //     }
-        //     _ => None,
-        // };
-
-        // let mut protocol_error = AIOProtocolError {
-        //     message: None,
-        //     kind: AIOProtocolErrorKind::ConfigurationInvalid,
-        //     is_shallow: true,
-        //     is_remote: false,
-        //     nested_error: Some(Box::new(builder_error)),
-        //     header_name: None,
-        //     header_value: None,
-        //     timeout_name: None,
-        //     timeout_value: None,
-        //     property_name,
-        //     property_value: None,
-        //     command_name: None,
-        //     protocol_version: None,
-        //     supported_protocol_major_versions: None,
-        // };
-
-        // protocol_error.ensure_error_message();
-        // protocol_error
     }
 }
