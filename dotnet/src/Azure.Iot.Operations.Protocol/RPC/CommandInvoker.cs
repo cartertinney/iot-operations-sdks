@@ -22,7 +22,7 @@ namespace Azure.Iot.Operations.Protocol.RPC
         private readonly int[] _supportedMajorProtocolVersions = [CommandVersion.MajorProtocolVersion];
 
         private static readonly TimeSpan DefaultCommandTimeout = TimeSpan.FromSeconds(10);
-        private static readonly TimeSpan MinimumCommandTimeout = TimeSpan.FromMilliseconds(1);
+        private static readonly TimeSpan MinimumCommandTimeout = TimeSpan.FromSeconds(1);
 
         internal static IWallClock WallClock = new WallClock();
 
@@ -98,9 +98,9 @@ namespace Azure.Iot.Operations.Protocol.RPC
                 throw AkriMqttException.GetConfigurationInvalidException(nameof(commandName), string.Empty);
             }
 
-            _mqttClient = mqttClient ?? throw AkriMqttException.GetArgumentInvalidException(commandName, nameof(mqttClient), string.Empty);
+            _mqttClient = mqttClient ?? throw AkriMqttException.GetConfigurationInvalidException(commandName, nameof(mqttClient), string.Empty);
             _commandName = commandName;
-            _serializer = serializer ?? throw AkriMqttException.GetArgumentInvalidException(commandName, nameof(serializer), string.Empty);
+            _serializer = serializer ?? throw AkriMqttException.GetConfigurationInvalidException(commandName, nameof(serializer), string.Empty);
 
             _subscribedTopics = [];
             _requestIdMap = [];
@@ -250,8 +250,7 @@ namespace Azure.Iot.Operations.Protocol.RPC
                     {
                         AkriMqttException akriException = new($"Received a response with an unparsable protocol version number: {responseProtocolVersion}")
                         {
-                            Kind = AkriMqttErrorKind.UnsupportedResponseVersion,
-                            InApplication = false,
+                            Kind = AkriMqttErrorKind.UnsupportedVersion,
                             IsShallow = false,
                             IsRemote = false,
                             CommandName = _commandName,
@@ -268,8 +267,7 @@ namespace Azure.Iot.Operations.Protocol.RPC
                     {
                         AkriMqttException akriException = new($"Received a response with an unsupported protocol version number: {responseProtocolVersion}")
                         {
-                            Kind = AkriMqttErrorKind.UnsupportedResponseVersion,
-                            InApplication = false,
+                            Kind = AkriMqttErrorKind.UnsupportedVersion,
                             IsShallow = false,
                             IsRemote = false,
                             CommandName = _commandName,
@@ -289,7 +287,6 @@ namespace Azure.Iot.Operations.Protocol.RPC
                         AkriMqttException akriException = new(message)
                         {
                             Kind = errorKind,
-                            InApplication = false,
                             IsShallow = false,
                             IsRemote = false,
                             HeaderName = headerName,
@@ -315,10 +312,8 @@ namespace Azure.Iot.Operations.Protocol.RPC
                         AkriMqttException akriException = new(statusMessage ?? "Error condition identified by remote service")
                         {
                             Kind = errorKind,
-                            InApplication = isApplicationError,
                             IsShallow = false,
                             IsRemote = true,
-                            HttpStatusCode = statusCode,
                             HeaderName = UseHeaderFields(errorKind) ? invalidNameProperty?.Value : null,
                             HeaderValue = UseHeaderFields(errorKind) ? invalidValueProperty?.Value : null,
                             PropertyName = UsePropertyFields(errorKind) ? invalidNameProperty?.Value : null,
@@ -329,7 +324,7 @@ namespace Azure.Iot.Operations.Protocol.RPC
                             CorrelationId = requestGuid,
                         };
 
-                        if (errorKind == AkriMqttErrorKind.UnsupportedRequestVersion)
+                        if (errorKind == AkriMqttErrorKind.UnsupportedVersion)
                         {
                             MqttUserProperty? supportedMajorVersions = args.ApplicationMessage.UserProperties?.FirstOrDefault(p => p.Name == AkriSystemProperties.SupportedMajorProtocolVersions);
                             MqttUserProperty? requestProtocolVersion = args.ApplicationMessage.UserProperties?.FirstOrDefault(p => p.Name == AkriSystemProperties.RequestedProtocolVersion);
@@ -444,12 +439,11 @@ namespace Azure.Iot.Operations.Protocol.RPC
                     AkriMqttErrorKind.PayloadInvalid,
                 CommandStatusCode.RequestTimeout => AkriMqttErrorKind.Timeout,
                 CommandStatusCode.UnsupportedMediaType => AkriMqttErrorKind.HeaderInvalid,
-                CommandStatusCode.UnprocessableContent => AkriMqttErrorKind.InvocationException,
                 CommandStatusCode.InternalServerError =>
                     isAppError ? AkriMqttErrorKind.ExecutionException :
                     hasInvalidName ? AkriMqttErrorKind.InternalLogicError :
                     AkriMqttErrorKind.UnknownError,
-                CommandStatusCode.NotSupportedVersion => AkriMqttErrorKind.UnsupportedRequestVersion,
+                CommandStatusCode.NotSupportedVersion => AkriMqttErrorKind.UnsupportedVersion,
                 CommandStatusCode.ServiceUnavailable => AkriMqttErrorKind.StateInvalid,
                 _ => AkriMqttErrorKind.UnknownError,
             };
@@ -484,6 +478,9 @@ namespace Azure.Iot.Operations.Protocol.RPC
 
             TimeSpan reifiedCommandTimeout = commandTimeout ?? DefaultCommandTimeout;
 
+            // Rounding up to the nearest second
+            reifiedCommandTimeout = TimeSpan.FromSeconds(Math.Ceiling(reifiedCommandTimeout.TotalSeconds));
+
             if (reifiedCommandTimeout < MinimumCommandTimeout)
             {
                 throw AkriMqttException.GetArgumentInvalidException("commandTimeout", nameof(commandTimeout), reifiedCommandTimeout, $"commandTimeout must be at least {MinimumCommandTimeout}");
@@ -499,7 +496,6 @@ namespace Azure.Iot.Operations.Protocol.RPC
                 throw new AkriMqttException($"Command '{_commandName}' invocation failed due to duplicate request with same correlationId")
                 {
                     Kind = AkriMqttErrorKind.StateInvalid,
-                    InApplication = false,
                     IsShallow = true,
                     IsRemote = false,
                     CommandName = _commandName,
@@ -587,7 +583,6 @@ namespace Azure.Iot.Operations.Protocol.RPC
                         throw new AkriMqttException($"Command '{_commandName}' invocation failed due to an unsuccessful publishing with the error code {pubReasonCode}.")
                         {
                             Kind = AkriMqttErrorKind.MqttError,
-                            InApplication = false,
                             IsShallow = false,
                             IsRemote = false,
                             CommandName = _commandName,
@@ -601,7 +596,6 @@ namespace Azure.Iot.Operations.Protocol.RPC
                     throw new AkriMqttException($"Command '{_commandName}' invocation failed due to an exception thrown by MQTT Publish.", ex)
                     {
                         Kind = AkriMqttErrorKind.MqttError,
-                        InApplication = false,
                         IsShallow = false,
                         IsRemote = false,
                         CommandName = _commandName,
@@ -619,7 +613,6 @@ namespace Azure.Iot.Operations.Protocol.RPC
                             ?? new AkriMqttException($"Command '{_commandName}' failed with unknown exception")
                             {
                                 Kind = AkriMqttErrorKind.UnknownError,
-                                InApplication = false,
                                 IsShallow = false,
                                 IsRemote = false,
                                 CommandName = _commandName,
@@ -634,7 +627,6 @@ namespace Azure.Iot.Operations.Protocol.RPC
                     throw new AkriMqttException($"Command '{_commandName}' timed out while waiting for a response", e)
                     {
                         Kind = AkriMqttErrorKind.Timeout,
-                        InApplication = false,
                         IsShallow = false,
                         IsRemote = false,
                         TimeoutName = nameof(commandTimeout),
@@ -650,7 +642,6 @@ namespace Azure.Iot.Operations.Protocol.RPC
                     throw new AkriMqttException($"Command '{_commandName}' was cancelled while waiting for a response", e)
                     {
                         Kind = AkriMqttErrorKind.Cancellation,
-                        InApplication = false,
                         IsShallow = false,
                         IsRemote = false,
                         CommandName = _commandName,
@@ -664,8 +655,7 @@ namespace Azure.Iot.Operations.Protocol.RPC
             {
                 throw new AkriMqttException(ex.Message)
                 {
-                    Kind = AkriMqttErrorKind.ArgumentInvalid,
-                    InApplication = false,
+                    Kind = AkriMqttErrorKind.ConfigurationInvalid,
                     IsShallow = true,
                     IsRemote = false,
                     PropertyName = ex.ParamName,
