@@ -1012,7 +1012,7 @@ fn validate_and_parse_response<TResp: PayloadSerialize>(
                     Err(e) => {
                         return Err(RPCError::new(
                             RPCErrorKind::HeaderInvalid {
-                                header_name: "HybridLogicalClock".to_string(),
+                                header_name: key,
                                 header_value: e.input.clone(),
                             },
                             Some(e),
