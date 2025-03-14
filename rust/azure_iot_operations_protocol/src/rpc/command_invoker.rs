@@ -840,6 +840,41 @@ where
     }
 }
 
+/// Represents an error reported by a remote executor
+#[derive(thiserror::Error, Debug)]
+#[error("Remote Error status code: {status_code:?}")]
+pub struct RemoteError {
+    /// Status code received from a remote service that caused the error
+    status_code: u16,
+    /// The message received with the error
+    status_message: Option<String>,
+    /// Indicates if the error was detected in the user-application
+    is_application_error: bool,
+    /// The name of the property that was invalid
+    invalid_property_name: Option<String>,
+    /// The value of the property that was invalid
+    invalid_property_value: Option<String>,
+    /// Protocol version of the request
+    protocol_version: Option<String>,
+    /// List of accepted major protocol versions
+    supported_protocol_major_versions: Option<Vec<u16>>,
+}
+
+
+struct ResponseData {
+
+}
+
+
+
+
+
+
+
+
+
+
+
 fn validate_and_parse_response<TResp: PayloadSerialize>(
     application_hlc: &Arc<ApplicationHybridLogicalClock>,
     command_name: String,
