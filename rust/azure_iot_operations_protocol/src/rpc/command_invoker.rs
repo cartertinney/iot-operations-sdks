@@ -16,6 +16,7 @@ use tokio::{
 };
 use uuid::Uuid;
 
+use crate::common::aio_protocol_error;
 use crate::common::user_properties::{validate_invoker_user_properties, PARTITION_KEY};
 use crate::{
     application::{ApplicationContext, ApplicationHybridLogicalClock},
@@ -847,7 +848,7 @@ where
 #[error("Remote Error status code: {status_code:?}")]
 pub struct RemoteError {
     /// Status code received from a remote service that caused the error
-    status_code: Option<u16>,
+    status_code: StatusCode,
     /// The message received with the error
     status_message: Option<String>,
     /// Indicates if the error was detected in the user-application
@@ -856,19 +857,21 @@ pub struct RemoteError {
     invalid_property_name: Option<String>,
     /// The value of the property that was invalid
     invalid_property_value: Option<String>,
-    /// Protocol version of the request
-    protocol_version: Option<String>,
-    /// List of accepted major protocol versions
-    supported_protocol_major_versions: Option<Vec<u16>>,
 }
 
 impl RemoteError {
-    // pub fn into_aio_protocol_error(command_name: &str) -> Option<AIOProtocolError> {
+    pub fn new_from_property_map(status_code: StatusCode, property_map: &HashMap<UserProperty, String>) -> Self {
+        Self {
+            status_code,
+            status_message: property_map.get(&UserProperty::StatusMessage).cloned(),
+            is_application_error: property_map.get(&UserProperty::IsApplicationError).map_or(false, |v| v == "true"),
+            invalid_property_name: property_map.get(&UserProperty::InvalidPropertyName).cloned(),
+            invalid_property_value: property_map.get(&UserProperty::InvalidPropertyValue).cloned(),
+        }
 
-    // }
+    }
 }
 
-// fn parse_properties() -> 
 
 
 fn validate_and_parse_response<TResp: PayloadSerialize>(
@@ -877,16 +880,6 @@ fn validate_and_parse_response<TResp: PayloadSerialize>(
     response_payload: &Bytes,
     response_properties: PublishProperties,
 ) -> Result<CommandResponse<TResp>, AIOProtocolError> {
-
-    // Create a default RemoteError that can be filled out as we parse
-    let response_error = RemoteError::default();
-
-
-
-    let mut status: Option<StatusCode> = None;
-    let mut invalid_property_name: Option<String> = None;
-    let mut invalid_property_value: Option<String> = None;
-
 
     // Parse user properties
     let expected_aio_properties = vec![
@@ -917,19 +910,12 @@ fn validate_and_parse_response<TResp: PayloadSerialize>(
         }
     }
 
-    // Validate required properties are present and add default values as appropriate
-    // if !response_aio_data.contains_key(&UserProperty::ProtocolVersion) {
-    //     response_aio_data.insert(UserProperty::ProtocolVersion, DEFAULT_RPC_PROTOCOL_VERSION.to_string());
-    // }
 
-    // Extract and validate required properties
-
-
-    // Validate properties
+    // Validate general properties
     let protocol_version = {
         match response_aio_data.get(&UserProperty::ProtocolVersion) {
             Some(protocol_version) => {
-                if let Ok(version) = ProtocolVersion::parse_protocol_version(protocol_version) {
+                if let Some(version) = ProtocolVersion::parse_protocol_version(protocol_version) {
                     version
                 } else {
                     return Err(AIOProtocolError::new_unsupported_version_error(
@@ -950,7 +936,7 @@ fn validate_and_parse_response<TResp: PayloadSerialize>(
     if !protocol_version.is_supported(SUPPORTED_PROTOCOL_VERSIONS) {
         return Err(AIOProtocolError::new_unsupported_version_error(
             None,
-            response_protocol_version.to_string(),
+            protocol_version.to_string(),
             SUPPORTED_PROTOCOL_VERSIONS.to_vec(),
             Some(command_name),
             false,
@@ -958,22 +944,93 @@ fn validate_and_parse_response<TResp: PayloadSerialize>(
         ));
     }
 
+    let timestamp = {
+        match response_aio_data.get(&UserProperty::Timestamp) {
+            Some(v) => {
+                match HybridLogicalClock::from_str(&v) {
+                    Ok(ts) => {
+                        // Update application HLC against received __ts
+                        if let Err(mut e) = application_hlc.update(&ts) {
+                            // update error to include command name
+                            e.command_name = Some(command_name);
+                            return Err(e);
+                        }
+                        Some(ts)
+                    }
+                    Err(mut e) => {
+                        // update error to include more specific header name
+                        e.header_name = Some(UserProperty::Timestamp.to_string());
+                        e.command_name = Some(command_name);
+                        return Err(e);
+                    }
+                }
+            },
+            None => None,
+        }
+    };
+
+    let status = {
+        match response_aio_data.get(&UserProperty::Status) {
+            Some(s) => {
+                match StatusCode::from_str(s) {
+                    Ok(code) => code,
+                    Err(StatusCodeParseError::InvalidStatusCode(s)) => {
+                        return Err(AIOProtocolError::new_header_invalid_error(
+                            UserProperty::Status.to_string().as_str(),
+                            &s,
+                            false,
+                            Some(format!(
+                                "Could not parse status in response '{s}' as an integer"
+                            )),
+                            Some(command_name),
+                        ));
+                    }
+                    Err(StatusCodeParseError::UnknownStatusCode(s)) => {
+                        let status_message = response_aio_data.get(&UserProperty::StatusMessage).unwrap_or(
+                            &"Unknown".to_string()
+                        );
+                        return Err(AIOProtocolError::new_unknown_error(
+                            true,
+                            false,
+                            None,
+                            Some(status_message.clone()),
+                            Some(command_name),
+                        ))
+                    }
+                }
+            },
+            None => {
+                return Err(AIOProtocolError::new_header_missing_error(
+                    "__stat",
+                    false,
+                    Some(format!(
+                        "Response missing MQTT user property '{}'",
+                        UserProperty::Status
+                    )),
+                    Some(command_name),
+                ));
+            }
+        }
+    };
 
 
-    if !response_aio_data.contains_key(&UserProperty::Status) {
-        return Err(AIOProtocolError::new_header_missing_error(
-            "__stat",
-            false,
-            Some(format!(
-                "Response missing MQTT user property '{}'",
-                UserProperty::Status
-            )),
-            Some(command_name),
-        ));
+
+    // Process result based on status code
+    match status {
+        StatusCode::Ok => {},
+        StatusCode::NoContent => {},
+        _ => {
+            // Error
+            let remote_error = RemoteError::new_from_property_map(status, &response_aio_data);
+        }
+        //StatusCode::BadRequest => {
+            // if let Some(property_value) = response_aio_data.get(&UserProperty::InvalidPropertyValue) {
+            //     return AIOProtocolError::new_header_invalid_error(
+            //         header_name:
+            //     )
+            // }
+        },
     }
-
-
-
 
 
 
