@@ -5,7 +5,6 @@
 
 use std::str::FromStr;
 
-use crate::common::aio_protocol_error::AIOProtocolError;
 use crate::ProtocolVersion;
 
 /// This module contains the command invoker implementation.
@@ -23,7 +22,7 @@ pub(crate) const DEFAULT_RPC_PROTOCOL_VERSION: ProtocolVersion =
 /// Represents the valid status codes for command responses.
 #[repr(u16)]
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub enum StatusCode {
+pub(crate) enum StatusCode {
     /// No error.
     Ok = 200,
 
@@ -49,9 +48,9 @@ pub enum StatusCode {
 }
 
 impl FromStr for StatusCode {
-    type Err = AIOProtocolError;
+    type Err = StatusCodeParseError;
 
-    fn from_str(s: &str) -> Result<Self, AIOProtocolError> {
+    fn from_str(s: &str) -> Result<Self, StatusCodeParseError> {
         match s.parse::<u16>() {
             Ok(status) => match status {
                 x if x == StatusCode::Ok as u16 => Ok(StatusCode::Ok),
@@ -70,25 +69,19 @@ impl FromStr for StatusCode {
                 x if x == StatusCode::VersionNotSupported as u16 => {
                     Ok(StatusCode::VersionNotSupported)
                 }
-                _ => Err(AIOProtocolError::new_unknown_error(
-                    true,
-                    false,
-                    None,
-                    Some(format!("Unknown status code: {s}")),
-                    None,
-                )),
+                _ => Err(StatusCodeParseError::UnknownStatusCode(status)),
             },
-            Err(e) => Err(AIOProtocolError::new_header_invalid_error(
-                "__stat",
-                s,
-                false,
-                Some(format!(
-                    "Could not parse status in response '{s}' as an integer: {e}"
-                )),
-                None,
-            )),
+            Err(_) => Err(StatusCodeParseError::InvalidStatusCode(s.to_string())),
         }
     }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub(crate) enum StatusCodeParseError {
+    #[error("Invalid status code: {0}")]
+    InvalidStatusCode(String),
+    #[error("Unknown status code: {0}")]
+    UnknownStatusCode(u16),
 }
 
 #[cfg(test)]
@@ -97,7 +90,7 @@ mod tests {
 
     use test_case::test_case;
 
-    use crate::{common::aio_protocol_error::AIOProtocolErrorKind, rpc::StatusCode};
+    use super::*;
 
     #[test_case(StatusCode::Ok; "Ok")]
     #[test_case(StatusCode::NoContent; "NoContent")]
@@ -120,13 +113,11 @@ mod tests {
         let code_result = StatusCode::from_str(test_invalid_code);
         match code_result {
             Ok(_) => panic!("Expected error"),
-            Err(e) => {
-                assert_eq!(e.kind, AIOProtocolErrorKind::HeaderInvalid);
-                assert!(!e.is_shallow);
-                assert!(!e.is_remote);
-                assert!(e.nested_error.is_none());
-                assert_eq!(e.header_name, Some("__stat".to_string()));
-                assert_eq!(e.header_value, Some(test_invalid_code.to_string()));
+            Err(StatusCodeParseError::InvalidStatusCode(s)) => {
+                assert_eq!(s, test_invalid_code.to_string());
+            }
+            Err(StatusCodeParseError::UnknownStatusCode(_)) => {
+                panic!("Expected InvalidStatusCode error")
             }
         }
     }
@@ -137,11 +128,11 @@ mod tests {
         let code_result = StatusCode::from_str(&test_unknown_code.to_string());
         match code_result {
             Ok(_) => panic!("Expected error"),
-            Err(e) => {
-                assert_eq!(e.kind, AIOProtocolErrorKind::UnknownError);
-                assert!(!e.is_shallow);
-                assert!(e.is_remote);
-                assert!(e.nested_error.is_none());
+            Err(StatusCodeParseError::UnknownStatusCode(s)) => {
+                assert_eq!(s, test_unknown_code);
+            }
+            Err(StatusCodeParseError::InvalidStatusCode(_)) => {
+                panic!("Expected UnknownStatusCode error")
             }
         }
     }

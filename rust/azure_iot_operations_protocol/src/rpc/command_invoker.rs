@@ -34,6 +34,8 @@ use crate::{
     ProtocolVersion,
 };
 
+use super::StatusCodeParseError;
+
 const SUPPORTED_PROTOCOL_VERSIONS: &[u16] = &[1];
 
 /// Command Request struct.
@@ -860,20 +862,9 @@ pub struct RemoteError {
     supported_protocol_major_versions: Option<Vec<u16>>,
 }
 
+// impl RemoteError {
 
-struct ResponseData {
-
-}
-
-
-
-
-
-
-
-
-
-
+// }
 
 fn validate_and_parse_response<TResp: PayloadSerialize>(
     application_hlc: &Arc<ApplicationHybridLogicalClock>,
@@ -972,15 +963,26 @@ fn validate_and_parse_response<TResp: PayloadSerialize>(
                     Ok(code) => {
                         status = Some(code);
                     }
-                    Err(mut e) => {
-                        e.command_name = Some(command_name.clone());
-                        if e.kind == AIOProtocolErrorKind::UnknownError {
-                            // if the error is that the status code isn't recognized, we want to include the status message before returning it to the application
-                            unknown_status_error = Some(e);
-                        } else {
-                            // any other parsing errors can be returned immediately
-                            return Err(e);
-                        }
+                    Err(StatusCodeParseError::InvalidStatusCode(s)) => {
+                        return Err(AIOProtocolError::new_header_invalid_error(
+                            UserProperty::Status.to_string().as_str(),
+                            &s,
+                            false,
+                            Some(format!(
+                                "Could not parse status in response '{s}' as an integer"
+                            )),
+                            Some(command_name),
+                        ));
+                    }
+                    Err(StatusCodeParseError::UnknownStatusCode(s)) => {
+                        // if the error is that the status code isn't recognized, we want to include the status message before returning it to the application
+                        unknown_status_error = Some(AIOProtocolError::new_unknown_error(
+                            true,
+                            false,
+                            None,
+                            Some(format!("Unknown status code: {s}")),
+                            Some(command_name.clone()),
+                        ));
                     }
                 }
             }
