@@ -67,41 +67,6 @@ impl std::error::Error for RPCError {
     }
 }
 
-impl From<HLCError> for RPCError {
-    fn from(error: HLCError) -> Self {
-        // let (property_name, message) = match error.kind() {
-        //     HLCErrorKind::OverflowWarning => {
-        //         ("Counter", "Integer overflow on HybridLogicalClock counter")
-        //     }
-        //     HLCErrorKind::ClockDrift => (
-        //         "MaxClockDrift",
-        //         "HybridLogicalClock drift is greater than the maximum allowed drift",
-        //     ),
-        // };
-
-        let property_name = match error.kind() {
-            HLCErrorKind::OverflowWarning => "Counter",
-            HLCErrorKind::ClockDrift => "MaxClockDrift",
-        };
-
-        RPCError {
-            kind: RPCErrorKind::StateInvalid {
-                property_name: property_name.to_string(),
-                property_value: None,
-            },
-            source: Some(Box::new(error)),
-            is_shallow: true,
-            command_name: None,
-        }
-        // AIOProtocolError::new_state_invalid_error(
-        //     property_name,
-        //     None,
-        //     Some(message.to_string()),
-        //     None,
-        // )
-    }
-}
-
 /// The kind of RPC error
 #[derive(Debug)]
 pub enum RPCErrorKind {
