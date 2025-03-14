@@ -1019,13 +1019,6 @@ fn validate_and_parse_response<TResp: PayloadSerialize>(
                             false,
                             command_name
                         ))
-
-
-                        // // update error to include more specific header name
-                        // let mut aio_error: AIOProtocolError = e.into();
-                        // aio_error.header_name = Some(key);
-                        // aio_error.command_name = Some(command_name);
-                        // return Err(aio_error);
                     }
                 }
             }
