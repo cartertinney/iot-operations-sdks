@@ -8,6 +8,7 @@ use std::time::Duration;
 use azure_iot_operations_mqtt::error::{
     CompletionError, PublishError, SubscribeError, UnsubscribeError,
 };
+use crate::common::hybrid_logical_clock::{HLCError, HLCErrorKind, ParseHLCError};
 
 /// An error that occurred during an RPC operation
 #[derive(Debug)]
@@ -19,7 +20,6 @@ pub struct RPCError {
     /// Indicates whether the error was detected prior to attempted network communication
     is_shallow: bool,
     /// Command name
-    /// TODO: do we want this Optional?
     command_name: Option<String>,
 }
 
@@ -64,6 +64,41 @@ impl std::fmt::Display for RPCError {
 impl std::error::Error for RPCError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         self.source.as_ref().map(|e| e.as_ref())
+    }
+}
+
+impl From<HLCError> for RPCError {
+    fn from(error: HLCError) -> Self {
+        // let (property_name, message) = match error.kind() {
+        //     HLCErrorKind::OverflowWarning => {
+        //         ("Counter", "Integer overflow on HybridLogicalClock counter")
+        //     }
+        //     HLCErrorKind::ClockDrift => (
+        //         "MaxClockDrift",
+        //         "HybridLogicalClock drift is greater than the maximum allowed drift",
+        //     ),
+        // };
+
+        let property_name = match error.kind() {
+            HLCErrorKind::OverflowWarning => "Counter",
+            HLCErrorKind::ClockDrift => "MaxClockDrift",
+        };
+
+        RPCError {
+            kind: RPCErrorKind::StateInvalid {
+                property_name: property_name.to_string(),
+                property_value: None,
+            },
+            source: Some(Box::new(error)),
+            is_shallow: true,
+            command_name: None,
+        }
+        // AIOProtocolError::new_state_invalid_error(
+        //     property_name,
+        //     None,
+        //     Some(message.to_string()),
+        //     None,
+        // )
     }
 }
 
@@ -147,14 +182,21 @@ pub enum Value {
 
 /// Represents an error reported by a remote executor
 #[derive(thiserror::Error, Debug)]
-#[error("Remote Error status code: {status:?}")]
+#[error("Remote Error status code: {status_code:?}")]
 pub struct RemoteError {
     /// Status code received from a remote service that caused the error
-    status_code: Option<u16>,
+    status_code: u16,
     /// The message received with the error
     status_message: Option<String>,
+    /// Indicates if the error was detected in the user-application
     is_application_error: bool,
+    /// The name of the property that was invalid
+    invalid_property_name: Option<String>,
+    /// The value of the property that was invalid
+    invalid_property_value: Option<String>,
+    /// Protocol version of the request
     protocol_version: Option<String>,
+    /// List of accepted major protocol versions
     supported_protocol_major_versions: Option<Vec<u16>>,
 }
 
