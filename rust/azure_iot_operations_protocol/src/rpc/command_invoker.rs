@@ -1020,15 +1020,7 @@ fn validate_and_parse_response<TResp: PayloadSerialize>(
         StatusCode::Ok => {},
         StatusCode::NoContent => {},
         _ => {
-            // Error
             let remote_error = RemoteError::new_from_property_map(status, &response_aio_data);
-        }
-        //StatusCode::BadRequest => {
-            // if let Some(property_value) = response_aio_data.get(&UserProperty::InvalidPropertyValue) {
-            //     return AIOProtocolError::new_header_invalid_error(
-            //         header_name:
-            //     )
-            // }
         },
     }
 
