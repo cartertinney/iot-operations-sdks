@@ -912,6 +912,7 @@ fn validate_and_parse_response<TResp: PayloadSerialize>(
 
 
     // Validate general properties
+    // TODO: Ask Valerie if this can be processed only for success
     let protocol_version = {
         match response_aio_data.get(&UserProperty::ProtocolVersion) {
             Some(protocol_version) => {
@@ -944,6 +945,8 @@ fn validate_and_parse_response<TResp: PayloadSerialize>(
         ));
     }
 
+    // Is this necessary in an error? If not, validate later?
+    // TODO: Ask Valerie if processing this only for Success messes up HLC, or if we should check on error
     let timestamp = {
         match response_aio_data.get(&UserProperty::Timestamp) {
             Some(v) => {
