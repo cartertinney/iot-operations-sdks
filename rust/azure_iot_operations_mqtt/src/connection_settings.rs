@@ -275,12 +275,7 @@ impl MqttConnectionSettingsBuilder {
     /// Validate the MQTT Connection Settings.
     ///
     /// # Errors
-    /// Returns a `String` describing the error if
-    /// - `hostname` is empty
-    /// - `client_id` is empty and `clean_start` is false
-    /// - `password` and `password_file` are both Some
-    /// - `sat_file` is Some and `password` or `password_file` are Some
-    /// - `key_file` is Some and `cert_file` is None or empty
+    /// Returns a `String` describing the error if the fields contain invalid values
     fn validate(&self) -> Result<(), String> {
         if let Some(hostname) = &self.hostname {
             if hostname.is_empty() {
@@ -289,18 +284,7 @@ impl MqttConnectionSettingsBuilder {
         }
         if let Some(client_id) = &self.client_id {
             if client_id.is_empty() {
-                if let Some(clean_start) = self.clean_start {
-                    if !clean_start {
-                        return Err(
-                            "client_id is mandatory when clean_start is set to false".to_string()
-                        );
-                    }
-                } else {
-                    // default for clean_start is false
-                    return Err(
-                        "client_id is mandatory when clean_start is set to false".to_string()
-                    );
-                }
+                return Err("client_id cannot be empty".to_string());
             }
         }
         if let (Some(password), Some(password_file)) = (&self.password, &self.password_file) {
@@ -408,37 +392,12 @@ mod tests {
     }
 
     #[test]
-    fn client_id_clean_start_combos() {
-        // The client_id must be provided if clean_start is false
+    fn client_id() {
         let result = MqttConnectionSettingsBuilder::default()
             .hostname("test_host".to_string())
-            .clean_start(false)
-            .build();
-        assert!(result.is_err());
-
-        // The client_id cannot be empty if clean_start is false
-        let result = MqttConnectionSettingsBuilder::default()
             .client_id(String::new())
-            .hostname("test_host".to_string())
-            .clean_start(false)
             .build();
         assert!(result.is_err());
-
-        // The client id still must be provided if clean_start is true
-        let result = MqttConnectionSettingsBuilder::default()
-            .hostname("test_host".to_string())
-            .clean_start(true)
-            .build();
-        assert!(result.is_err());
-
-        // But an empty client_id is allowed if clean_start is true
-        // NOTE: Not sure why though. Perhaps this is undesirable.
-        let result = MqttConnectionSettingsBuilder::default()
-            .client_id(String::new())
-            .hostname("test_host".to_string())
-            .clean_start(true)
-            .build();
-        assert!(result.is_ok());
     }
 
     #[test]
