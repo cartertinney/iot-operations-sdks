@@ -75,6 +75,9 @@ pub struct MqttConnectionSettings {
 impl MqttConnectionSettingsBuilder {
     /// Initialize the [`MqttConnectionSettingsBuilder`] from environment variables.
     ///
+    /// Values that are not present in the environment will be set to defaults (including those
+    /// that are not possible to be provided by the AIO environment variables).
+    ///
     /// Example
     /// ```
     /// # use azure_iot_operations_mqtt::{MqttConnectionSettings, MqttConnectionSettingsBuilder, MqttConnectionSettingsBuilderError};
@@ -89,8 +92,10 @@ impl MqttConnectionSettingsBuilder {
     /// ```
     ///
     /// # Errors
-    /// Returns a `String` describing the error if any of the environment variables are invalid.
+    /// Returns a `String` describing the error if any of the environment variables contain invalid data.
     pub fn from_environment() -> Result<Self, String> {
+        // Extract values from environment variables and parse them as needed and transform them
+        // into the expected values for the builder.
         let client_id = string_from_environment("AIO_MQTT_CLIENT_ID")?;
         let hostname = string_from_environment("AIO_BROKER_HOSTNAME")?;
         let tcp_port = string_from_environment("AIO_BROKER_TCP_PORT")?
@@ -109,17 +114,18 @@ impl MqttConnectionSettingsBuilder {
             .map(|v| v.parse::<bool>())
             .transpose()
             .map_err(|e| format!("AIO_MQTT_CLEAN_START: {e}"))?;
-        let username = Some(string_from_environment("AIO_MQTT_USERNAME")?);
-        let password_file = Some(string_from_environment("AIO_MQTT_PASSWORD_FILE")?);
+        let username = string_from_environment("AIO_MQTT_USERNAME")?.map(|v| Some(v));
+        let password_file = string_from_environment("AIO_MQTT_PASSWORD_FILE")?.map(|v| Some(v));
         let use_tls = string_from_environment("AIO_MQTT_USE_TLS")?
             .map(|v| v.parse::<bool>())
             .transpose()
             .map_err(|e| format!("AIO_MQTT_USE_TLS: {e}"))?;
-        let ca_file = Some(string_from_environment("AIO_TLS_CA_FILE")?);
-        let cert_file = Some(string_from_environment("AIO_TLS_CERT_FILE")?);
-        let key_file = Some(string_from_environment("AIO_TLS_KEY_FILE")?);
-        let key_password_file = Some(string_from_environment("AIO_TLS_KEY_PASSWORD_FILE")?);
-        let sat_file = Some(string_from_environment("AIO_SAT_FILE")?);
+        let ca_file = string_from_environment("AIO_TLS_CA_FILE")?.map(|v| Some(v));
+        let cert_file = string_from_environment("AIO_TLS_CERT_FILE")?.map(|v| Some(v));
+        let key_file = string_from_environment("AIO_TLS_KEY_FILE")?.map(|v| Some(v));
+        let key_password_file =
+            string_from_environment("AIO_TLS_KEY_PASSWORD_FILE")?.map(|v| Some(v));
+        let sat_file = string_from_environment("AIO_SAT_FILE")?.map(|v| Some(v));
 
         // Log warnings if required values are missing
         // NOTE: Do not error. It is valid to have empty values if the user will be overriding them,
@@ -141,31 +147,31 @@ impl MqttConnectionSettingsBuilder {
             );
         }
 
-        // TODO: consider removing some of the Option wrappers in the Builder definition to avoid these spurious Some() wrappers.
-        Ok(Self {
-            client_id,
-            hostname,
-            tcp_port,
-            keep_alive,
-            receive_max: Some(u16::MAX),
-            receive_packet_size_max: None,
-            session_expiry,
-            connection_timeout: Some(Duration::from_secs(30)),
-            clean_start,
-            username,
-            password: None,
-            password_file,
-            use_tls,
-            ca_file,
-            cert_file,
-            key_file,
-            key_password_file,
-            sat_file,
-        })
+        // Create a default builder, and then override the values extracted from environment,
+        // leaving the remainder as the default values defined by the builder.
+        let mut settings = Self::default();
+        settings.client_id = client_id;
+        settings.hostname = hostname;
+        settings.tcp_port = tcp_port;
+        settings.keep_alive = keep_alive;
+        settings.session_expiry = session_expiry;
+        settings.clean_start = clean_start;
+        settings.username = username;
+        settings.password_file = password_file;
+        settings.use_tls = use_tls;
+        settings.ca_file = ca_file;
+        settings.cert_file = cert_file;
+        settings.key_file = key_file;
+        settings.key_password_file = key_password_file;
+        settings.sat_file = sat_file;
+        Ok(settings)
     }
 
     /// Construct a builder from the configuration files mounted by the Akri Operator.
     /// This method is only usable for connector applications deployed as a kubernetes pod.
+    ///
+    /// Values that are not present in the configuration file mounts will be set to defaults
+    /// (including those that are not possible to be provided by file mounts).
     ///
     /// # Examples
     ///
@@ -241,12 +247,11 @@ impl MqttConnectionSettingsBuilder {
 
         // --- Mount 2: BROKER_SAT_MOUNT_PATH ---
         // NOTE: This will be moved to be part of Mount 1 in the future.
-        let sat_file = Some(string_from_environment("BROKER_SAT_MOUNT_PATH")?);
+        let sat_file = string_from_environment("BROKER_SAT_MOUNT_PATH")?.map(|v| Some(v));
 
         // --- Mount 3: BROKER_TLS_TRUST_BUNDLE_CACERT_MOUNT_PATH ---
-        let ca_file = Some(string_from_environment(
-            "BROKER_TLS_TRUST_BUNDLE_CACERT_MOUNT_PATH",
-        )?);
+        let ca_file =
+            string_from_environment("BROKER_TLS_TRUST_BUNDLE_CACERT_MOUNT_PATH")?.map(|v| Some(v));
 
         // Log warnings if required values are missing
         // NOTE: Do not error. It is valid to have empty values if the user will be overriding them
@@ -261,27 +266,16 @@ impl MqttConnectionSettingsBuilder {
             log::warn!("BROKER_TARGET_ADDRESS is not set in AEP configmap");
         }
 
-        // Return builder with settings
-        Ok(Self {
-            client_id,
-            hostname,
-            tcp_port,
-            keep_alive: Some(Duration::from_secs(60)),
-            receive_max: Some(u16::MAX),
-            receive_packet_size_max: None,
-            session_expiry: Some(Duration::from_secs(3600)),
-            connection_timeout: Some(Duration::from_secs(30)),
-            clean_start: Some(false),
-            username: None,
-            password: None,
-            password_file: None,
-            use_tls,
-            ca_file,
-            cert_file: None,
-            key_file: None,
-            key_password_file: None,
-            sat_file,
-        })
+        // Create a default builder, and then override the values extracted from file mount(s),
+        // leaving the remainder as the default values defined by the builder.
+        let mut settings = Self::default();
+        settings.client_id = client_id;
+        settings.hostname = hostname;
+        settings.tcp_port = tcp_port;
+        settings.use_tls = use_tls;
+        settings.ca_file = ca_file;
+        settings.sat_file = sat_file;
+        Ok(settings)
     }
 
     /// Validate the MQTT Connection Settings.
@@ -585,7 +579,10 @@ mod tests {
                     "AIO_TLS_KEY_PASSWORD_FILE",
                     Some("/path/to/key/password/file"),
                 ),
-                (auth_env_var, auth_env_value), // This will be either password_file or sat_file
+                // Set default None values for mutually exclusive auth vars, then override
+                ("AIO_MQTT_PASSWORD_FILE", None),
+                ("AIO_SAT_FILE", None),
+                (auth_env_var, auth_env_value), // This will override one of the above two vars
             ],
             || {
                 let builder = MqttConnectionSettingsBuilder::from_environment().unwrap();
@@ -629,8 +626,14 @@ mod tests {
                 // provided
                 let default_builder = MqttConnectionSettingsBuilder::default();
                 assert_eq!(builder.receive_max, default_builder.receive_max);
-                assert_eq!(builder.receive_packet_size_max, default_builder.receive_packet_size_max);
-                assert_eq!(builder.connection_timeout, default_builder.connection_timeout);
+                assert_eq!(
+                    builder.receive_packet_size_max,
+                    default_builder.receive_packet_size_max
+                );
+                assert_eq!(
+                    builder.connection_timeout,
+                    default_builder.connection_timeout
+                );
                 assert_eq!(builder.password, default_builder.password);
                 // Validate that the settings struct can be built using only the values provided
                 // from the environment
@@ -645,6 +648,18 @@ mod tests {
             [
                 ("AIO_MQTT_CLIENT_ID", Some("test-client-id")),
                 ("AIO_BROKER_HOSTNAME", Some("test.hostname.com")),
+                ("AIO_BROKER_TCP_PORT", None),
+                ("AIO_MQTT_KEEP_ALIVE", None),
+                ("AIO_MQTT_SESSION_EXPIRY", None),
+                ("AIO_MQTT_CLEAN_START", None),
+                ("AIO_MQTT_USERNAME", None),
+                ("AIO_MQTT_PASSWORD_FILE", None),
+                ("AIO_MQTT_USE_TLS", None),
+                ("AIO_TLS_CA_FILE", None),
+                ("AIO_TLS_CERT_FILE", None),
+                ("AIO_TLS_KEY_FILE", None),
+                ("AIO_TLS_KEY_PASSWORD_FILE", None),
+                ("AIO_SAT_FILE", None),
             ],
             || {
                 let builder = MqttConnectionSettingsBuilder::from_environment().unwrap();
@@ -657,9 +672,15 @@ mod tests {
                 assert_eq!(builder.tcp_port, default_builder.tcp_port);
                 assert_eq!(builder.keep_alive, default_builder.keep_alive);
                 assert_eq!(builder.receive_max, default_builder.receive_max);
-                assert_eq!(builder.receive_packet_size_max, default_builder.receive_packet_size_max);
+                assert_eq!(
+                    builder.receive_packet_size_max,
+                    default_builder.receive_packet_size_max
+                );
                 assert_eq!(builder.session_expiry, default_builder.session_expiry);
-                assert_eq!(builder.connection_timeout, default_builder.connection_timeout);
+                assert_eq!(
+                    builder.connection_timeout,
+                    default_builder.connection_timeout
+                );
                 assert_eq!(builder.clean_start, default_builder.clean_start);
                 assert_eq!(builder.username, default_builder.username);
                 assert_eq!(builder.password, default_builder.password);
@@ -761,9 +782,15 @@ mod tests {
                 let default_builder = MqttConnectionSettingsBuilder::default();
                 assert_eq!(builder.keep_alive, default_builder.keep_alive);
                 assert_eq!(builder.receive_max, default_builder.receive_max);
-                assert_eq!(builder.receive_packet_size_max, default_builder.receive_packet_size_max);
+                assert_eq!(
+                    builder.receive_packet_size_max,
+                    default_builder.receive_packet_size_max
+                );
                 assert_eq!(builder.session_expiry, default_builder.session_expiry);
-                assert_eq!(builder.connection_timeout, default_builder.connection_timeout);
+                assert_eq!(
+                    builder.connection_timeout,
+                    default_builder.connection_timeout
+                );
                 assert_eq!(builder.clean_start, default_builder.clean_start);
                 assert_eq!(builder.username, default_builder.username);
                 assert_eq!(builder.password, default_builder.password);
@@ -798,9 +825,15 @@ mod tests {
                 let default_builder = MqttConnectionSettingsBuilder::default();
                 assert_eq!(builder.keep_alive, default_builder.keep_alive);
                 assert_eq!(builder.receive_max, default_builder.receive_max);
-                assert_eq!(builder.receive_packet_size_max, default_builder.receive_packet_size_max);
+                assert_eq!(
+                    builder.receive_packet_size_max,
+                    default_builder.receive_packet_size_max
+                );
                 assert_eq!(builder.session_expiry, default_builder.session_expiry);
-                assert_eq!(builder.connection_timeout, default_builder.connection_timeout);
+                assert_eq!(
+                    builder.connection_timeout,
+                    default_builder.connection_timeout
+                );
                 assert_eq!(builder.clean_start, default_builder.clean_start);
                 assert_eq!(builder.username, default_builder.username);
                 assert_eq!(builder.password, default_builder.password);
