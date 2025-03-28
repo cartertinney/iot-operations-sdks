@@ -197,50 +197,47 @@ impl MqttConnectionSettingsBuilder {
     pub fn from_file_mount() -> Result<Self, String> {
         // --- Mount 1: AEP_CONFIGMAP_MOUNT_PATH ---
         let (client_id, hostname, tcp_port, use_tls) = {
-            match string_from_environment("AEP_CONFIGMAP_MOUNT_PATH")? {
-                Some(s) => {
-                    let aep_pathbuf = PathBuf::from(&s);
-                    if !aep_pathbuf.as_path().exists() {
-                        return Err(format!("Config map path does not exist: {s}"));
-                    }
-                    // Read target address (hostname:port)
-                    let (hostname, tcp_port) = {
-                        match string_from_configmap_file(&aep_pathbuf, "BROKER_TARGET_ADDRESS")? {
-                            Some(target_address) => {
-                                // Parse hostname and port from target address
-                                let (hostname, tcp_port) = target_address.split_once(':').ok_or(
-                                    format!(
-                                        "BROKER_TARGET_ADDRESS is malformed. Expected format <hostname>:<port>. Found: {target_address}"
-                                    )
-                                )?;
-                                (
-                                    Some(hostname.to_string()),
-                                    Some(tcp_port.parse::<u16>().map_err(|e| {
-                                        format!(
-                                            "Cannot parse MQTT port from BROKER_TARGET_ADDRESS: {e}"
-                                        )
-                                    })?),
+            if let Some(s) = string_from_environment("AEP_CONFIGMAP_MOUNT_PATH")? {
+                let aep_pathbuf = PathBuf::from(&s);
+                if !aep_pathbuf.as_path().exists() {
+                    return Err(format!("Config map path does not exist: {s}"));
+                }
+                // Read target address (hostname:port)
+                let (hostname, tcp_port) = {
+                    match string_from_configmap_file(&aep_pathbuf, "BROKER_TARGET_ADDRESS")? {
+                        Some(target_address) => {
+                            // Parse hostname and port from target address
+                            let (hostname, tcp_port) = target_address.split_once(':').ok_or(
+                                format!(
+                                    "BROKER_TARGET_ADDRESS is malformed. Expected format <hostname>:<port>. Found: {target_address}"
                                 )
-                            }
-                            None => (None, None),
+                            )?;
+                            (
+                                Some(hostname.to_string()),
+                                Some(tcp_port.parse::<u16>().map_err(|e| {
+                                    format!(
+                                        "Cannot parse MQTT port from BROKER_TARGET_ADDRESS: {e}"
+                                    )
+                                })?),
+                            )
                         }
-                    };
-                    // Read client ID
-                    let client_id = string_from_configmap_file(&aep_pathbuf, "AIO_MQTT_CLIENT_ID")?;
-                    // Read use TLS setting
-                    let use_tls = string_from_configmap_file(&aep_pathbuf, "BROKER_USE_TLS")?
-                        .map(|v| v.parse::<bool>())
-                        .transpose()
-                        .map_err(|e| format!("BROKER_USE_TLS: {e}"))?;
+                        None => (None, None),
+                    }
+                };
+                // Read client ID
+                let client_id = string_from_configmap_file(&aep_pathbuf, "AIO_MQTT_CLIENT_ID")?;
+                // Read use TLS setting
+                let use_tls = string_from_configmap_file(&aep_pathbuf, "BROKER_USE_TLS")?
+                    .map(|v| v.parse::<bool>())
+                    .transpose()
+                    .map_err(|e| format!("BROKER_USE_TLS: {e}"))?;
 
-                    (client_id, hostname, tcp_port, use_tls)
-                }
-                None => {
-                    // NOTE: See the warning section father below in the function for an
-                    // explanation of why this isn't an error.
-                    log::warn!("AEP_CONFIGMAP_MOUNT_PATH is not set in environment");
-                    (None, None, None, None)
-                }
+                (client_id, hostname, tcp_port, use_tls)
+            } else {
+                // NOTE: See the warning section father below in the function for an
+                // explanation of why this isn't an error.
+                log::warn!("AEP_CONFIGMAP_MOUNT_PATH is not set in environment");
+                (None, None, None, None)
             }
         };
 
