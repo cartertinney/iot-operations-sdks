@@ -4,7 +4,7 @@
 //! Generic MQTT connection settings implementations
 
 use std::env::{self, VarError};
-use std::path::PathBuf;
+use std::path::{Path,PathBuf};
 use std::time::Duration;
 
 // TODO: Split up this struct to avoid weird combinations and separate concern.
@@ -114,18 +114,18 @@ impl MqttConnectionSettingsBuilder {
             .map(|v| v.parse::<bool>())
             .transpose()
             .map_err(|e| format!("AIO_MQTT_CLEAN_START: {e}"))?;
-        let username = string_from_environment("AIO_MQTT_USERNAME")?.map(|v| Some(v));
-        let password_file = string_from_environment("AIO_MQTT_PASSWORD_FILE")?.map(|v| Some(v));
+        let username = string_from_environment("AIO_MQTT_USERNAME")?.map(Some);
+        let password_file = string_from_environment("AIO_MQTT_PASSWORD_FILE")?.map(Some);
         let use_tls = string_from_environment("AIO_MQTT_USE_TLS")?
             .map(|v| v.parse::<bool>())
             .transpose()
             .map_err(|e| format!("AIO_MQTT_USE_TLS: {e}"))?;
-        let ca_file = string_from_environment("AIO_TLS_CA_FILE")?.map(|v| Some(v));
-        let cert_file = string_from_environment("AIO_TLS_CERT_FILE")?.map(|v| Some(v));
-        let key_file = string_from_environment("AIO_TLS_KEY_FILE")?.map(|v| Some(v));
+        let ca_file = string_from_environment("AIO_TLS_CA_FILE")?.map(Some);
+        let cert_file = string_from_environment("AIO_TLS_CERT_FILE")?.map(Some);
+        let key_file = string_from_environment("AIO_TLS_KEY_FILE")?.map(Some);
         let key_password_file =
-            string_from_environment("AIO_TLS_KEY_PASSWORD_FILE")?.map(|v| Some(v));
-        let sat_file = string_from_environment("AIO_SAT_FILE")?.map(|v| Some(v));
+            string_from_environment("AIO_TLS_KEY_PASSWORD_FILE")?.map(Some);
+        let sat_file = string_from_environment("AIO_SAT_FILE")?.map(Some);
 
         // Log warnings if required values are missing
         // NOTE: Do not error. It is valid to have empty values if the user will be overriding them,
@@ -147,24 +147,23 @@ impl MqttConnectionSettingsBuilder {
             );
         }
 
-        // Create a default builder, and then override the values extracted from environment,
-        // leaving the remainder as the default values defined by the builder.
-        let mut settings = Self::default();
-        settings.client_id = client_id;
-        settings.hostname = hostname;
-        settings.tcp_port = tcp_port;
-        settings.keep_alive = keep_alive;
-        settings.session_expiry = session_expiry;
-        settings.clean_start = clean_start;
-        settings.username = username;
-        settings.password_file = password_file;
-        settings.use_tls = use_tls;
-        settings.ca_file = ca_file;
-        settings.cert_file = cert_file;
-        settings.key_file = key_file;
-        settings.key_password_file = key_password_file;
-        settings.sat_file = sat_file;
-        Ok(settings)
+        Ok(Self {
+            client_id,
+            hostname,
+            tcp_port,
+            keep_alive,
+            session_expiry,
+            clean_start,
+            username,
+            password_file,
+            use_tls,
+            ca_file,
+            cert_file,
+            key_file,
+            key_password_file,
+            sat_file,
+            ..Default::default()
+        })
     }
 
     /// Construct a builder from the configuration files mounted by the Akri Operator.
@@ -247,11 +246,11 @@ impl MqttConnectionSettingsBuilder {
 
         // --- Mount 2: BROKER_SAT_MOUNT_PATH ---
         // NOTE: This will be moved to be part of Mount 1 in the future.
-        let sat_file = string_from_environment("BROKER_SAT_MOUNT_PATH")?.map(|v| Some(v));
+        let sat_file = string_from_environment("BROKER_SAT_MOUNT_PATH")?.map(Some);
 
         // --- Mount 3: BROKER_TLS_TRUST_BUNDLE_CACERT_MOUNT_PATH ---
         let ca_file =
-            string_from_environment("BROKER_TLS_TRUST_BUNDLE_CACERT_MOUNT_PATH")?.map(|v| Some(v));
+            string_from_environment("BROKER_TLS_TRUST_BUNDLE_CACERT_MOUNT_PATH")?.map(Some);
 
         // Log warnings if required values are missing
         // NOTE: Do not error. It is valid to have empty values if the user will be overriding them
@@ -266,16 +265,16 @@ impl MqttConnectionSettingsBuilder {
             log::warn!("BROKER_TARGET_ADDRESS is not set in AEP configmap");
         }
 
-        // Create a default builder, and then override the values extracted from file mount(s),
-        // leaving the remainder as the default values defined by the builder.
-        let mut settings = Self::default();
-        settings.client_id = client_id;
-        settings.hostname = hostname;
-        settings.tcp_port = tcp_port;
-        settings.use_tls = use_tls;
-        settings.ca_file = ca_file;
-        settings.sat_file = sat_file;
-        Ok(settings)
+
+        Ok(Self {
+            client_id,
+            hostname,
+            tcp_port,
+            use_tls,
+            ca_file,
+            sat_file,
+            ..Default::default()
+        })
     }
 
     /// Validate the MQTT Connection Settings.
@@ -352,10 +351,10 @@ fn string_from_environment(key: &str) -> Result<Option<String>, String> {
 
 /// Helper function to extract the value from a config map file as a string.
 fn string_from_configmap_file(
-    configmap_pathbuf: &PathBuf,
+    configmap_path: &Path,
     filename: &str,
 ) -> Result<Option<String>, String> {
-    let file_pathbuf = configmap_pathbuf.join(filename);
+    let file_pathbuf = configmap_path.join(filename);
     if !file_pathbuf.as_path().exists() {
         return Ok(None); // File doesn't exist, return None
     }
@@ -620,7 +619,7 @@ mod tests {
                         Some(Some("/path/to/sat/file".to_string()))
                     );
                 } else {
-                    panic!("Unexpected auth_env_var: {}", auth_env_var);
+                    panic!("Unexpected auth_env_var: {auth_env_var}");
                 }
                 // Validate that the default values were set correctly for values that were not
                 // provided
@@ -885,7 +884,7 @@ mod tests {
                 // .build() unless modified to include the required values.
                 assert!(builder.build().is_err());
             },
-        )
+        );
     }
 
     // NOTE: There is no test for the case where environment variable is set to a value
@@ -899,7 +898,7 @@ mod tests {
     fn from_file_mount_invalid_configmap_mount_env_var(invalid_path: &str) {
         temp_env::with_var("AEP_CONFIGMAP_MOUNT_PATH", Some(invalid_path), || {
             assert!(MqttConnectionSettingsBuilder::from_file_mount().is_err());
-        })
+        });
     }
 
     #[test_case("BROKER_TARGET_ADDRESS", "not-correct-format"; "Target address format")]
@@ -920,6 +919,6 @@ mod tests {
                 // Fails on .from_file_mount(), not .build()
                 assert!(MqttConnectionSettingsBuilder::from_file_mount().is_err());
             },
-        )
+        );
     }
 }
