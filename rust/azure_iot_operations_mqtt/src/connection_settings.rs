@@ -4,7 +4,7 @@
 //! Generic MQTT connection settings implementations
 
 use std::env::{self, VarError};
-use std::path::{Path,PathBuf};
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 // TODO: Split up this struct to avoid weird combinations and separate concern.
@@ -123,8 +123,7 @@ impl MqttConnectionSettingsBuilder {
         let ca_file = string_from_environment("AIO_TLS_CA_FILE")?.map(Some);
         let cert_file = string_from_environment("AIO_TLS_CERT_FILE")?.map(Some);
         let key_file = string_from_environment("AIO_TLS_KEY_FILE")?.map(Some);
-        let key_password_file =
-            string_from_environment("AIO_TLS_KEY_PASSWORD_FILE")?.map(Some);
+        let key_password_file = string_from_environment("AIO_TLS_KEY_PASSWORD_FILE")?.map(Some);
         let sat_file = string_from_environment("AIO_SAT_FILE")?.map(Some);
 
         // Log warnings if required values are missing
@@ -261,7 +260,6 @@ impl MqttConnectionSettingsBuilder {
         if hostname.is_none() || tcp_port.is_none() {
             log::warn!("BROKER_TARGET_ADDRESS is not set in AEP configmap");
         }
-
 
         Ok(Self {
             client_id,
