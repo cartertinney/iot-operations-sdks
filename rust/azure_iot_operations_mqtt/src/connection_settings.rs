@@ -142,7 +142,6 @@ impl MqttConnectionSettingsBuilder {
         }
 
         // TODO: consider removing some of the Option wrappers in the Builder definition to avoid these spurious Some() wrappers.
-
         Ok(Self {
             client_id,
             hostname,
@@ -626,7 +625,15 @@ mod tests {
                 } else {
                     panic!("Unexpected auth_env_var: {}", auth_env_var);
                 }
-                // Validate that the settings struct can be built using only the above values
+                // Validate that the default values were set correctly for values that were not
+                // provided
+                let default_builder = MqttConnectionSettingsBuilder::default();
+                assert_eq!(builder.receive_max, default_builder.receive_max);
+                assert_eq!(builder.receive_packet_size_max, default_builder.receive_packet_size_max);
+                assert_eq!(builder.connection_timeout, default_builder.connection_timeout);
+                assert_eq!(builder.password, default_builder.password);
+                // Validate that the settings struct can be built using only the values provided
+                // from the environment
                 assert!(builder.build().is_ok());
             },
         );
@@ -644,8 +651,27 @@ mod tests {
                 // Validate that all values from env variables were set on the builder
                 assert_eq!(builder.client_id, Some("test-client-id".to_string()));
                 assert_eq!(builder.hostname, Some("test.hostname.com".to_string()));
-
-                // Validate that the settings struct can be built using only the above values
+                // Validate that the default values were set correctly for values that were not
+                // provided
+                let default_builder = MqttConnectionSettingsBuilder::default();
+                assert_eq!(builder.tcp_port, default_builder.tcp_port);
+                assert_eq!(builder.keep_alive, default_builder.keep_alive);
+                assert_eq!(builder.receive_max, default_builder.receive_max);
+                assert_eq!(builder.receive_packet_size_max, default_builder.receive_packet_size_max);
+                assert_eq!(builder.session_expiry, default_builder.session_expiry);
+                assert_eq!(builder.connection_timeout, default_builder.connection_timeout);
+                assert_eq!(builder.clean_start, default_builder.clean_start);
+                assert_eq!(builder.username, default_builder.username);
+                assert_eq!(builder.password, default_builder.password);
+                assert_eq!(builder.password_file, default_builder.password_file);
+                assert_eq!(builder.use_tls, default_builder.use_tls);
+                assert_eq!(builder.ca_file, default_builder.ca_file);
+                assert_eq!(builder.cert_file, default_builder.cert_file);
+                assert_eq!(builder.key_file, default_builder.key_file);
+                assert_eq!(builder.key_password_file, default_builder.key_password_file);
+                assert_eq!(builder.sat_file, default_builder.sat_file);
+                // Validate that the settings struct can be built using only the values provided
+                // from the environment
                 assert!(builder.build().is_ok());
             },
         );
@@ -730,7 +756,23 @@ mod tests {
                 );
                 // Validate CA file value
                 assert_eq!(builder.ca_file, Some(Some("/path/to/ca/certs".to_string())));
-                // Validate that the settings struct can be built from only the above values
+                // Validate that the default values were set correctly for values that were not
+                // provided
+                let default_builder = MqttConnectionSettingsBuilder::default();
+                assert_eq!(builder.keep_alive, default_builder.keep_alive);
+                assert_eq!(builder.receive_max, default_builder.receive_max);
+                assert_eq!(builder.receive_packet_size_max, default_builder.receive_packet_size_max);
+                assert_eq!(builder.session_expiry, default_builder.session_expiry);
+                assert_eq!(builder.connection_timeout, default_builder.connection_timeout);
+                assert_eq!(builder.clean_start, default_builder.clean_start);
+                assert_eq!(builder.username, default_builder.username);
+                assert_eq!(builder.password, default_builder.password);
+                assert_eq!(builder.password_file, default_builder.password_file);
+                assert_eq!(builder.cert_file, default_builder.cert_file);
+                assert_eq!(builder.key_file, default_builder.key_file);
+                assert_eq!(builder.key_password_file, default_builder.key_password_file);
+                // Validate that the settings struct can be built using only the values provided
+                // from the file mounts
                 assert!(builder.build().is_ok());
             },
         );
@@ -751,7 +793,26 @@ mod tests {
                 assert_eq!(builder.hostname, Some("test.hostname.com".to_string()));
                 assert_eq!(builder.tcp_port, Some(8883));
                 assert_eq!(builder.client_id, Some("test-client-id".to_string()));
-                // Validate that the settings struct can be built from only the above values
+                // Validate that the default values were set correctly for values that were not
+                // provided
+                let default_builder = MqttConnectionSettingsBuilder::default();
+                assert_eq!(builder.keep_alive, default_builder.keep_alive);
+                assert_eq!(builder.receive_max, default_builder.receive_max);
+                assert_eq!(builder.receive_packet_size_max, default_builder.receive_packet_size_max);
+                assert_eq!(builder.session_expiry, default_builder.session_expiry);
+                assert_eq!(builder.connection_timeout, default_builder.connection_timeout);
+                assert_eq!(builder.clean_start, default_builder.clean_start);
+                assert_eq!(builder.username, default_builder.username);
+                assert_eq!(builder.password, default_builder.password);
+                assert_eq!(builder.password_file, default_builder.password_file);
+                assert_eq!(builder.use_tls, default_builder.use_tls);
+                assert_eq!(builder.ca_file, default_builder.ca_file);
+                assert_eq!(builder.cert_file, default_builder.cert_file);
+                assert_eq!(builder.key_file, default_builder.key_file);
+                assert_eq!(builder.key_password_file, default_builder.key_password_file);
+                assert_eq!(builder.sat_file, default_builder.sat_file);
+                // Validate that the settings struct can be built using only the values provided
+                // from the file mounts
                 assert!(builder.build().is_ok());
             },
         );
