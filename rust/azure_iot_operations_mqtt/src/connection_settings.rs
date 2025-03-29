@@ -277,41 +277,32 @@ impl MqttConnectionSettingsBuilder {
     /// # Errors
     /// Returns a `String` describing the error if the fields contain invalid values
     fn validate(&self) -> Result<(), String> {
-        if let Some(hostname) = &self.hostname {
-            if hostname.is_empty() {
-                return Err("Host name cannot be empty".to_string());
-            }
+        if self.hostname.as_ref().is_some_and(|h| h.is_empty()) {
+            return Err("Host name cannot be empty".to_string());
         }
-        if let Some(client_id) = &self.client_id {
-            if client_id.is_empty() {
-                return Err("client_id cannot be empty".to_string());
-            }
+        if self.client_id.as_ref().is_some_and(|c| c.is_empty()) {
+            return Err("client_id cannot be empty".to_string());
         }
-        if let (Some(password), Some(password_file)) = (&self.password, &self.password_file) {
-            if password.is_some() && password_file.is_some() {
-                return Err(
-                    "password and password_file should not be used at the same time.".to_string(),
-                );
-            }
+        if [
+            self.password.as_ref(),
+            self.password_file.as_ref(),
+            self.sat_file.as_ref(),
+        ]
+        .into_iter()
+        .filter(|&v| v.is_some_and(|s| s.as_ref().is_some()))
+        .count()
+            > 1
+        {
+            return Err("Only one of password, password_file or sat_file can be used.".to_string());
         }
-        if let Some(Some(_)) = &self.sat_file {
-            if let Some(Some(_)) = &self.password {
-                return Err("sat_file cannot be used with password or password_file.".to_string());
-            }
-            if let Some(Some(_)) = &self.password_file {
-                return Err("sat_file cannot be used with password or password_file.".to_string());
-            }
-        }
-        if let Some(Some(key_file)) = &self.key_file {
-            if let Some(Some(cert_file)) = &self.cert_file {
+        match (self.key_file.as_ref(), self.cert_file.as_ref()) {
+            (None | Some(None), None | Some(None)) => (),
+            (Some(Some(key_file)), Some(Some(cert_file))) => {
                 if cert_file.is_empty() || key_file.is_empty() {
-                    return Err("key_file and cert_file need to be provided together.".to_string());
+                    return Err("key_file and cert_file cannot be empty".to_string());
                 }
-            } else {
-                return Err("key_file and cert_file need to be provided together.".to_string());
             }
-        } else if let Some(Some(_)) = &self.cert_file {
-            return Err("key_file and cert_file need to be provided together.".to_string());
+            _ => return Err("key_file and cert_file need to be provided together.".to_string()),
         }
         Ok(())
     }
