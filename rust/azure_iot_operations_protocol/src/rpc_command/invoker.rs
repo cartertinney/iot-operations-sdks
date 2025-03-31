@@ -883,7 +883,6 @@ fn validate_and_parse_response<TResp: PayloadSerialize>(
     command_name: String,
     response_payload: &Bytes,
     response_properties: PublishProperties,
-<<<<<<< HEAD:rust/azure_iot_operations_protocol/src/rpc/command_invoker.rs
 ) -> Result<CommandResponse<TResp>, AIOProtocolError> {
 
     // Parse user properties
@@ -975,25 +974,6 @@ fn validate_and_parse_response<TResp: PayloadSerialize>(
             },
             None => None,
         }
-=======
-) -> Result<Response<TResp>, AIOProtocolError> {
-    // Create a default response error so we can update details as we parse
-    let mut response_error = AIOProtocolError {
-        kind: AIOProtocolErrorKind::UnknownError, // should be overwritten
-        message: None,                            // should be overwritten
-        is_shallow: false,                        // this is always false here
-        is_remote: true,                          // this should be overwritten as needed
-        nested_error: None,
-        header_name: None,
-        header_value: None,
-        timeout_name: None,
-        timeout_value: None,
-        property_name: None,
-        property_value: None,
-        command_name: Some(command_name.clone()), // correct for all errors here
-        protocol_version: None,
-        supported_protocol_major_versions: None,
->>>>>>> main:rust/azure_iot_operations_protocol/src/rpc_command/invoker.rs
     };
 
     let status = {
