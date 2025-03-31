@@ -140,18 +140,16 @@ impl MqttConnectionSettingsBuilder {
         // Similar to the above, some fields are mutually exclusive, but shouldn't be an error,
         // since, per the builder pattern, it should technically be possible to override them,
         // although this is almost certainly a misconfiguration.
-        match (&sat_file, &password_file) {
-            (Some(Some(_)), Some(Some(_))) => {
-                log::warn!(
-                    "AIO_SAT_FILE and AIO_MQTT_PASSWORD_FILE are both set in environment. Only one should be used."
-                );
-            }
-            _ => (),
+        if let (Some(Some(_)), Some(Some(_))) = (&sat_file, &password_file) {
+            log::warn!(
+                "AIO_SAT_FILE and AIO_MQTT_PASSWORD_FILE are both set in environment. Only one should be used."
+            );
         }
         // And some fields are required to be provided together.
         match (&cert_file, &key_file) {
-            (Some(Some(_)), Some(Some(_))) => (),
-            (None | Some(None), None | Some(None)) => (), // technically Some(None) is impossible, but...
+            (Some(Some(_)), Some(Some(_)))  // Both are set
+            | (None | Some(None), None | Some(None)) // Neither is set (Some(None) technically impossible, but...)
+            => (),
             _ => {
                 log::warn!(
                     "AIO_TLS_CERT_FILE and AIO_TLS_KEY_FILE need to be set in environment together."
@@ -159,16 +157,11 @@ impl MqttConnectionSettingsBuilder {
             }
         }
         // And some fields require the presence of another
-        match (&key_file, &key_password_file) {
-            (None | Some(None), Some(Some(_))) => {
-                log::warn!(
-                    "AIO_TLS_KEY_PASSWORD_FILE is set in environment, but AIO_TLS_KEY_FILE is not."
-                );
-            }
-            _ => (),
+        if let (None | Some(None), Some(Some(_))) = (&key_file, &key_password_file) {
+            log::warn!(
+                "AIO_TLS_KEY_PASSWORD_FILE is set in environment, but AIO_TLS_KEY_FILE is not."
+            );
         }
-
-        // WHAT ABOUT KEY_PASSWORD_FILE WITHOUT KEY_FILE???
 
         Ok(Self {
             client_id,
@@ -328,11 +321,10 @@ impl MqttConnectionSettingsBuilder {
             }
             _ => return Err("key_file and cert_file need to be provided together.".to_string()),
         }
-        match (self.key_file.as_ref(), self.key_password_file.as_ref()) {
-            (None | Some(None), Some(Some(_))) => {
-                return Err("key_password_file is set, but key_file is not.".to_string());
-            }
-            _ => (),
+        if let (None | Some(None), Some(Some(_))) =
+            (self.key_file.as_ref(), self.key_password_file.as_ref())
+        {
+            return Err("key_password_file is set, but key_file is not.".to_string());
         }
         Ok(())
     }
