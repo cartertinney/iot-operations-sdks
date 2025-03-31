@@ -9,28 +9,21 @@ use azure_iot_operations_protocol::common::aio_protocol_error::AIOProtocolError;
 <# if (this.respSchema != null) { #>
 use azure_iot_operations_protocol::common::payload_serialize::PayloadSerialize;
 <# } #>
-use azure_iot_operations_protocol::rpc::command_executor::{
-    CommandExecutor, CommandExecutorOptionsBuilder, CommandRequest, CommandResponse,
-    CommandResponseBuilder, CommandResponseBuilderError,
-};
+use azure_iot_operations_protocol::rpc_command;
 use azure_iot_operations_protocol::application::ApplicationContext;
 <# if (this.ttl != null) { #>
 use iso8601_duration;
 <# } #>
 
 <# if (this.reqSchema is CodeName) { #>
-<# if (this.reqNamespace == null) { #>
-use super::<#=this.reqSchema.GetFileName(TargetLanguage.Rust)#>::<#=this.reqSchema.GetTypeName(TargetLanguage.Rust)#>;
-<# } else { #>
-use super::super::<#=this.reqNamespace.GetFolderName(TargetLanguage.Rust)#>::<#=this.reqSchema.GetFileName(TargetLanguage.Rust)#>::<#=this.reqSchema.GetTypeName(TargetLanguage.Rust)#>;
-<# } #>
+use super::<#=this.NamespaceRef(this.reqNamespace)#><#=this.reqSchema.GetFileName(TargetLanguage.Rust)#>::<#=this.reqSchema.GetTypeName(TargetLanguage.Rust)#>;
 <# } #>
 <# if (this.respSchema is CodeName) { #>
-<# if (this.respNamespace == null) { #>
-use super::<#=this.respSchema.GetFileName(TargetLanguage.Rust)#>::<#=this.respSchema.GetTypeName(TargetLanguage.Rust)#>;
-<# } else { #>
-use super::super::<#=this.respNamespace.GetFolderName(TargetLanguage.Rust)#>::<#=this.respSchema.GetFileName(TargetLanguage.Rust)#>::<#=this.respSchema.GetTypeName(TargetLanguage.Rust)#>;
+use super::<#=this.NamespaceRef(this.respNamespace)#><#=this.respSchema.GetFileName(TargetLanguage.Rust)#>::<#=this.respSchema.GetTypeName(TargetLanguage.Rust)#>;
 <# } #>
+<# if (this.errorResultName != null) { #>
+use super::<#=this.NamespaceRef(this.normalResultNamespace)#><#=this.normalResultSchema.GetFileName(TargetLanguage.Rust)#>::<#=this.normalResultSchema.GetTypeName(TargetLanguage.Rust)#>;
+use super::<#=this.NamespaceRef(this.errorResultNamespace)#><#=this.errorResultSchema.GetFileName(TargetLanguage.Rust)#>::<#=this.errorResultSchema.GetTypeName(TargetLanguage.Rust)#>;
 <# } #>
 <# if (this.useSharedSubscription) { #>
 use super::COMMAND_SERVICE_GROUP_ID;
@@ -46,14 +39,14 @@ use super::super::common_types::<#=this.serializerEmptyType.GetFileName(TargetLa
 <# } #>
 
 pub type <#=this.commandName.GetTypeName(TargetLanguage.Rust, "request")#> =
-    CommandRequest<<#=this.RequestType()#>, <#=this.ResponseType()#>>;
-pub type <#=this.commandName.GetTypeName(TargetLanguage.Rust, "response")#> = CommandResponse<<#=this.ResponseType()#>>;
-pub type <#=this.commandName.GetTypeName(TargetLanguage.Rust, "response", "builder", "error")#> = CommandResponseBuilderError;
+    rpc_command::executor::Request<<#=this.RequestType()#>, <#=this.ResponseType()#>>;
+pub type <#=this.commandName.GetTypeName(TargetLanguage.Rust, "response")#> = rpc_command::executor::Response<<#=this.ResponseType()#>>;
+pub type <#=this.commandName.GetTypeName(TargetLanguage.Rust, "response", "builder", "error")#> = rpc_command::executor::ResponseBuilderError;
 
 /// Builder for [`<#=this.commandName.GetTypeName(TargetLanguage.Rust, "response")#>`]
 #[derive(Default)]
 pub struct <#=this.commandName.GetTypeName(TargetLanguage.Rust, "response", "builder")#> {
-    inner_builder: CommandResponseBuilder<<#=this.ResponseType()#>>,
+    inner_builder: rpc_command::executor::ResponseBuilder<<#=this.ResponseType()#>>,
 }
 
 impl <#=this.commandName.GetTypeName(TargetLanguage.Rust, "response", "builder")#> {
@@ -70,9 +63,26 @@ impl <#=this.commandName.GetTypeName(TargetLanguage.Rust, "response", "builder")
     /// If the payload cannot be serialized
     pub fn payload(
         &mut self,
-        payload: <#=this.respSchema.GetTypeName(TargetLanguage.Rust)#>,
+        payload: <#=(this.normalResultSchema ?? this.respSchema).GetTypeName(TargetLanguage.Rust)#>,
     ) -> Result<&mut Self, AIOProtocolError> {
+<# if (this.errorResultName != null) { #>
+        self.inner_builder.payload(<#=this.respSchema.GetTypeName(TargetLanguage.Rust)#> {
+            <#=this.normalResultName.GetFieldName(TargetLanguage.Rust)#>: <#=this.CondSome($"payload.{this.normalResultName.GetFieldName(TargetLanguage.Rust)}", !this.isRespNullable)#>,
+            <#=this.errorResultName.GetFieldName(TargetLanguage.Rust)#>: None,
+        })?;
+<# } else { #>
         self.inner_builder.payload(payload)?;
+<# } #>
+        Ok(self)
+    }
+
+<# } #>
+<# if (this.errorResultName != null) { #>
+    pub fn error(&mut self, error: <#=this.errorResultSchema.GetTypeName(TargetLanguage.Rust)#>) -> Result<&mut Self, AIOProtocolError> {
+        self.inner_builder.payload(<#=this.respSchema.GetTypeName(TargetLanguage.Rust)#> {
+            <#=this.normalResultName.GetFieldName(TargetLanguage.Rust)#>: None,
+            <#=this.errorResultName.GetFieldName(TargetLanguage.Rust)#>: Some(error),
+        })?;
         Ok(self)
     }
 
@@ -93,7 +103,7 @@ impl <#=this.commandName.GetTypeName(TargetLanguage.Rust, "response", "builder")
 
 /// Command Executor for `<#=this.commandName.AsGiven#>`
 pub struct <#=this.commandName.GetTypeName(TargetLanguage.Rust, "command", "executor")#><C>(
-    CommandExecutor<<#=this.RequestType()#>, <#=this.ResponseType()#>, C>,
+    rpc_command::Executor<<#=this.RequestType()#>, <#=this.ResponseType()#>, C>,
 )
 where
     C: ManagedClient + Clone + Send + Sync + 'static,
@@ -109,7 +119,7 @@ where
     /// # Panics
     /// If the DTDL that generated this code was invalid
     pub fn new(application_context: ApplicationContext, client: C, options: &CommandOptions) -> Self {
-        let mut executor_options_builder = CommandExecutorOptionsBuilder::default();
+        let mut executor_options_builder = rpc_command::executor::OptionsBuilder::default();
         if let Some(topic_namespace) = &options.topic_namespace {
             executor_options_builder.topic_namespace(topic_namespace.clone());
         }
@@ -146,7 +156,7 @@ where
             .expect("DTDL schema generated invalid arguments");
 
         Self(
-            CommandExecutor::new(application_context, client, executor_options)
+            rpc_command::Executor::new(application_context, client, executor_options)
                 .expect("DTDL schema generated invalid arguments"),
         )
     }
@@ -172,4 +182,8 @@ where
     private string RequestType() => this.reqSchema?.GetTypeName(TargetLanguage.Rust) ?? this.serializerEmptyType.GetTypeName(TargetLanguage.Rust);
 
     private string ResponseType() => this.respSchema?.GetTypeName(TargetLanguage.Rust) ?? this.serializerEmptyType.GetTypeName(TargetLanguage.Rust);
+
+    private string NamespaceRef(CodeName schemaNamespace) => schemaNamespace != null ? $"super::{schemaNamespace.GetFolderName(TargetLanguage.Rust)}::" : "";
+
+    private string CondSome(string expr, bool doWrap) => doWrap ? $"Some({expr})" : expr;
 #>

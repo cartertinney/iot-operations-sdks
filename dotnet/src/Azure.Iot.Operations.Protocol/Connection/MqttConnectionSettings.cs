@@ -15,7 +15,7 @@ namespace Azure.Iot.Operations.Protocol.Connection
     {
         private const int DefaultTcpPort = 8883;
         private const bool DefaultUseTls = true;
-        private const bool DefaultCleanStart = true;
+        private const bool DefaultCleanStart = false;
 
         private static readonly TimeSpan s_defaultKeepAlive = TimeSpan.FromSeconds(60);
         private static readonly TimeSpan s_defaultSessionExpiry = TimeSpan.FromSeconds(3600);
@@ -218,19 +218,7 @@ namespace Azure.Iot.Operations.Protocol.Connection
                 }
             }
 
-            string clientId;
-            try
-            {
-                clientId = File.ReadAllText(configMapPath + "/AIO_MQTT_CLIENT_ID");
-                if (string.IsNullOrEmpty(clientId))
-                {
-                    throw AkriMqttException.GetConfigurationInvalidException("AIO_MQTT_CLIENT_ID", string.Empty, "AIO_MQTT_CLIENT_ID is missing.");
-                }
-            }
-            catch (Exception e)
-            {
-                throw AkriMqttException.GetConfigurationInvalidException("AIO_MQTT_CLIENT_ID", string.Empty, "Missing or malformed client ID configuration file", e);
-            }
+            string clientId = Guid.NewGuid().ToString();
 
             try
             {

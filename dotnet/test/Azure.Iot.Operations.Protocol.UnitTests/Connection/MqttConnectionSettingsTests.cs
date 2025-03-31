@@ -25,7 +25,7 @@ namespace Azure.Iot.Operations.Protocol.UnitTests.Connection
             Assert.Null(cs.Username);
             Assert.Null(cs.PasswordFile);
             Assert.Equal("clientId", cs.ClientId);
-            Assert.True(cs.CleanStart);
+            Assert.False(cs.CleanStart);
             Assert.Equal(TimeSpan.FromSeconds(60), cs.KeepAlive);
             Assert.Equal(TimeSpan.FromSeconds(3600), cs.SessionExpiry);
             Assert.Null(cs.SatAuthFile);
@@ -251,7 +251,7 @@ namespace Azure.Iot.Operations.Protocol.UnitTests.Connection
                 KeyFile = "TestSdkLiteCertPwdKey.txt",
                 KeyPasswordFile = "TestSdkLiteKeyPwd.txt"
             };
-            Assert.Equal("HostName=localhost;ClientId=clientId;CertFile=TestSdkLiteCertPwdPem.txt;KeyFile=***;KeyPasswordFile=***;TcpPort=8883;CleanStart=True;SessionExpiry=3600;KeepAlive=60;UseTls=True", mcs.ToString());
+            Assert.Equal("HostName=localhost;ClientId=clientId;CertFile=TestSdkLiteCertPwdPem.txt;KeyFile=***;KeyPasswordFile=***;TcpPort=8883;CleanStart=False;SessionExpiry=3600;KeepAlive=60;UseTls=True", mcs.ToString());
         }
 
         [Fact]
@@ -527,7 +527,7 @@ namespace Azure.Iot.Operations.Protocol.UnitTests.Connection
             };
             MqttClientOptions options = new(mqttConnectionSettings);
             Assert.NotNull(options);
-            Assert.True(options.CleanSession);
+            Assert.False(options.CleanSession);
             Assert.Equal("clientId", options.ClientId);
             Assert.Equal(MqttProtocolVersion.V500, options.ProtocolVersion);
             Assert.Equal(TimeSpan.FromSeconds(15), options.KeepAlivePeriod);
@@ -554,7 +554,7 @@ namespace Azure.Iot.Operations.Protocol.UnitTests.Connection
             };
             MqttClientOptions options = new(mqttConnectionSettings);
             Assert.NotNull(options);
-            Assert.True(options.CleanSession);
+            Assert.False(options.CleanSession);
             Assert.Equal("clientId", options.ClientId);
             Assert.Equal(MqttProtocolVersion.V500, options.ProtocolVersion);
             Assert.Equal(TimeSpan.FromSeconds(15), options.KeepAlivePeriod);
@@ -581,7 +581,7 @@ namespace Azure.Iot.Operations.Protocol.UnitTests.Connection
             };
             MqttClientOptions options = new(mqttConnectionSettings);
             Assert.NotNull(options);
-            Assert.True(options.CleanSession);
+            Assert.False(options.CleanSession);
             Assert.Equal("clientId", options.ClientId);
             Assert.Equal(MqttProtocolVersion.V500, options.ProtocolVersion);
             Assert.Equal(TimeSpan.FromSeconds(15), options.KeepAlivePeriod);
@@ -610,7 +610,7 @@ namespace Azure.Iot.Operations.Protocol.UnitTests.Connection
             };
             MqttClientOptions options = new(mqttConnectionSettings);
             Assert.NotNull(options);
-            Assert.True(options.CleanSession);
+            Assert.False(options.CleanSession);
             Assert.Equal("clientId", options.ClientId);
             Assert.Equal(MqttProtocolVersion.V500, options.ProtocolVersion);
             Assert.Equal(TimeSpan.FromSeconds(15), options.KeepAlivePeriod);
@@ -639,7 +639,7 @@ namespace Azure.Iot.Operations.Protocol.UnitTests.Connection
             };
             MqttClientOptions options = new(mqttConnectionSettings);
             Assert.NotNull(options);
-            Assert.True(options.CleanSession);
+            Assert.False(options.CleanSession);
             Assert.Equal("clientId", options.ClientId);
             Assert.Equal(MqttProtocolVersion.V500, options.ProtocolVersion);
             Assert.Equal(TimeSpan.FromSeconds(15), options.KeepAlivePeriod);
@@ -667,7 +667,7 @@ namespace Azure.Iot.Operations.Protocol.UnitTests.Connection
             };
             MqttClientOptions options = new(mqttConnectionSettings);
             Assert.NotNull(options);
-            Assert.True(options.CleanSession);
+            Assert.False(options.CleanSession);
             Assert.Equal("clientId", options.ClientId);
             Assert.Equal(MqttProtocolVersion.V500, options.ProtocolVersion);
             Assert.Equal(TimeSpan.FromSeconds(15), options.KeepAlivePeriod);
@@ -725,16 +725,6 @@ namespace Azure.Iot.Operations.Protocol.UnitTests.Connection
             });
             Assert.Equal("ClientId", ex.PropertyName);
             Assert.Equal("ClientId is mandatory. (Parameter 'ClientId')", ex.Message);
-        }
-
-        [Fact]
-        public void CreateFromFileMount_ThrowsIfClientIdFileIsEmpty()
-        {
-            Environment.SetEnvironmentVariable("AEP_CONFIGMAP_MOUNT_PATH", "./Connection/testMountFilesMissingClientId");
-            Environment.SetEnvironmentVariable("BROKER_SAT_MOUNT_PATH", "sat.txt");
-            Environment.SetEnvironmentVariable("BROKER_TLS_TRUST_BUNDLE_CACERT_MOUNT_PATH", "Connection");
-            var ex = Assert.Throws<AkriMqttException>(() => MqttConnectionSettings.FromFileMount());
-            Assert.Equal("AIO_MQTT_CLIENT_ID", ex.PropertyName);
         }
 
         [Fact]

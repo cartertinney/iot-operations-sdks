@@ -1,7 +1,7 @@
 name: CI-Cross language
 on:
   workflow_dispatch:
-  pull_request:
+  pull_request_target:
   push:
     branches: [main]
   schedule:
@@ -11,6 +11,11 @@ on:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+
+permissions:
+  contents: read
+  actions: read
+  checks: write
 
 env:
   AIO_BROKER_HOSTNAME: localhost
@@ -35,15 +40,16 @@ jobs:
       - uses: actions/checkout@v4
 
       #=======================================================================
-      # Install prerequesities
+      # Install prerequisites
       #=======================================================================
       - name: Install AIO
-        uses: ./.github/actions/deploy-aio
+        uses: ./.github/actions/configure-aio
         with:
           wait-for-broker: 'true'
           install-go: 'true'
           install-dotnet: 'true'
           install-rust: 'true'
+          action-token: ${{ secrets.AIO_SDKS_ACTION_TOKEN }}
 
       #=======================================================================
       # Build codegen and verify it matches repository
@@ -51,7 +57,7 @@ jobs:
       - name: Build codegen
         run: |
           dotnet build -c Debug codegen/codegen.sln
-          echo "codegen=$(echo $(realpath codegen/src/Azure.Iot.Operations.ProtocolCompiler/bin/Debug/net8.0/Azure.Iot.Operations.ProtocolCompiler))" >> $GITHUB_ENV
+          echo "codegen=$(echo $(realpath codegen/src/Azure.Iot.Operations.ProtocolCompiler/bin/Debug/net9.0/Azure.Iot.Operations.ProtocolCompiler))" >> $GITHUB_ENV
 
       - name: CodeGen Rust Counter samples
         run: |
@@ -59,7 +65,7 @@ jobs:
 
       - name: CodeGen .NET Counter samples
         run: |
-          pushd dotnet/samples/TestEnvoys; $codegen --modelFile ../../../eng/test/schema-samples/counter.json --sdkPath ../../src/Azure.Iot.Operations.Protocol --lang=csharp; popd
+          pushd dotnet/samples/Protocol/TestEnvoys; $codegen --modelFile ../../../../eng/test/schema-samples/counter.json --sdkPath ../../../src/Azure.Iot.Operations.Protocol --lang=csharp; popd
 
       - name: CodeGen Go Counter samples
         run: |
