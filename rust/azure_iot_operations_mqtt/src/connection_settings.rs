@@ -140,11 +140,35 @@ impl MqttConnectionSettingsBuilder {
         // Similar to the above, some fields are mutually exclusive, but shouldn't be an error,
         // since, per the builder pattern, it should technically be possible to override them,
         // although this is almost certainly a misconfiguration.
-        if sat_file.is_some() && password_file.is_some() {
-            log::warn!(
-                "AIO_SAT_FILE and AIO_MQTT_PASSWORD_FILE are both set in environment. Only one should be used."
-            );
+        match (&sat_file, &password_file) {
+            (Some(Some(_)), Some(Some(_))) => {
+                log::warn!(
+                    "AIO_SAT_FILE and AIO_MQTT_PASSWORD_FILE are both set in environment. Only one should be used."
+                );
+            }
+            _ => (),
         }
+        // And some fields are required to be provided together.
+        match (&cert_file, &key_file) {
+            (Some(Some(_)), Some(Some(_))) => (),
+            (None | Some(None), None | Some(None)) => (), // technically Some(None) is impossible, but...
+            _ => {
+                log::warn!(
+                    "AIO_TLS_CERT_FILE and AIO_TLS_KEY_FILE need to be set in environment together."
+                );
+            }
+        }
+        // And some fields require the presence of another
+        match (&key_file, &key_password_file) {
+            (None | Some(None), Some(Some(_))) => {
+                log::warn!(
+                    "AIO_TLS_KEY_PASSWORD_FILE is set in environment, but AIO_TLS_KEY_FILE is not."
+                );
+            }
+            _ => (),
+        }
+
+        // WHAT ABOUT KEY_PASSWORD_FILE WITHOUT KEY_FILE???
 
         Ok(Self {
             client_id,
@@ -277,10 +301,10 @@ impl MqttConnectionSettingsBuilder {
     /// # Errors
     /// Returns a `String` describing the error if the fields contain invalid values
     fn validate(&self) -> Result<(), String> {
-        if self.hostname.as_ref().is_some_and(|h| h.is_empty()) {
+        if self.hostname.as_ref().is_some_and(String::is_empty) {
             return Err("Host name cannot be empty".to_string());
         }
-        if self.client_id.as_ref().is_some_and(|c| c.is_empty()) {
+        if self.client_id.as_ref().is_some_and(String::is_empty) {
             return Err("client_id cannot be empty".to_string());
         }
         if [
@@ -303,6 +327,12 @@ impl MqttConnectionSettingsBuilder {
                 }
             }
             _ => return Err("key_file and cert_file need to be provided together.".to_string()),
+        }
+        match (self.key_file.as_ref(), self.key_password_file.as_ref()) {
+            (None | Some(None), Some(Some(_))) => {
+                return Err("key_password_file is set, but key_file is not.".to_string());
+            }
+            _ => (),
         }
         Ok(())
     }
@@ -497,6 +527,40 @@ mod tests {
             .hostname("test_host".to_string())
             .cert_file("test_cert_file".to_string())
             .key_file(String::new())
+            .build();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn key_file_password_combos() {
+        // NOTE: Key file implies cert file as well, so cert file will be included in this test
+        // even though it is not the element under test
+
+        // The key file and key password file can be provided together
+        let result = MqttConnectionSettingsBuilder::default()
+            .client_id("test_client_id".to_string())
+            .hostname("test_host".to_string())
+            .cert_file("test_cert_file".to_string())
+            .key_file("test_key_file".to_string())
+            .key_password_file("test_key_password_file".to_string())
+            .build();
+        assert!(result.is_ok());
+
+        // The key file can be provided without the key password file
+        let result = MqttConnectionSettingsBuilder::default()
+            .client_id("test_client_id".to_string())
+            .hostname("test_host".to_string())
+            .cert_file("test_cert_file".to_string())
+            .key_file("test_key_file".to_string())
+            .build();
+        assert!(result.is_ok());
+
+        // But the key password file cannot be used without the key file
+        let result = MqttConnectionSettingsBuilder::default()
+            .client_id("test_client_id".to_string())
+            .hostname("test_host".to_string())
+            .cert_file("test_cert_file".to_string())
+            .key_password_file("test_key_password_file".to_string())
             .build();
         assert!(result.is_err());
     }
