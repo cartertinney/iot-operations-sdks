@@ -29,6 +29,7 @@ namespace Azure.Iot.Operations.Protocol.Models
             ProtocolVersion = MqttProtocolVersion.V500;
             CleanSession = cs.CleanStart;
             SessionExpiryInterval = (uint)cs.SessionExpiry.TotalSeconds;
+            ReceiveMaximum = cs.ReceiveMaximum;
 
             if (!string.IsNullOrEmpty(cs.Username))
             {
@@ -181,10 +182,10 @@ namespace Azure.Iot.Operations.Protocol.Models
 
         /// <summary>
         ///     Gets or sets the receive maximum.
-        ///     This gives the maximum length of the receive messages.
+        ///     This tells the broker the maximum number of messages that can be in flight to this client at a time.
         ///     <remarks>MQTT 5.0.0+ feature.</remarks>
         /// </summary>
-        public ushort ReceiveMaximum { get; set; }
+        public ushort? ReceiveMaximum { get; set; }
 
         /// <summary>
         ///     Gets or sets the request problem information.
@@ -204,11 +205,6 @@ namespace Azure.Iot.Operations.Protocol.Models
         ///     <remarks>MQTT 5.0.0+ feature.</remarks>
         /// </summary>
         public uint SessionExpiryInterval { get; set; }
-
-        /// <summary>
-        ///     Gets or sets whether an exception should be thrown when the server has sent a non success ACK packet.
-        /// </summary>
-        public bool ThrowOnNonSuccessfulConnectResponse { get; set; } = true;
 
         /// <summary>
         ///     Gets or sets the timeout which will be applied at socket level and internal operations.
