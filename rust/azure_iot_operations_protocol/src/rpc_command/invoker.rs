@@ -399,13 +399,20 @@ where
                         let status_message = response_aio_data
                             .remove(&UserProperty::StatusMessage)
                             .unwrap_or(String::from("Unknown"));
-                        return Err(AIOProtocolError::new_unknown_error(
+                        let mut unknown_err = AIOProtocolError::new_unknown_error(
                             true,
                             false,
                             None,
                             Some(status_message),
                             None,
-                        ));
+                        );
+                        // Add any invalid properties that might be included for extra information
+                        unknown_err.property_name =
+                            response_aio_data.remove(&UserProperty::InvalidPropertyName);
+                        unknown_err.property_value = response_aio_data
+                            .remove(&UserProperty::InvalidPropertyValue)
+                            .map(Value::String);
+                        return Err(unknown_err);
                     }
                 },
                 None => {
