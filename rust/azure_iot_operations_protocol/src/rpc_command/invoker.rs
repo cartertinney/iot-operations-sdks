@@ -159,6 +159,348 @@ where
     pub timestamp: Option<HybridLogicalClock>,
 }
 
+/// Represents an error reported by a remote executor
+#[derive(thiserror::Error, Debug, Clone)]
+#[error("Remote Error status code: {status_code:?}")]
+pub struct RemoteError {
+    /// Status code received from a remote service that caused the error
+    status_code: StatusCode,
+    /// Protocol version of data received from a remote service
+    protocol_version: ProtocolVersion,
+    /// The message received with the error
+    status_message: Option<String>,
+    /// Indicates if the error was detected in the user-application
+    is_application_error: bool,
+    /// The name of the property that was invalid
+    invalid_property_name: Option<String>,
+    /// The value of the property that was invalid
+    invalid_property_value: Option<String>,
+    /// List of supported major protocol versions
+    supported_protocol_major_versions: Option<Vec<u16>>,
+    /// The timestamp of the error
+    timestamp: Option<HybridLogicalClock>,
+}
+
+impl From<RemoteError> for AIOProtocolError {
+    fn from(value: RemoteError) -> Self {
+        // NOTE: We do not use the AIOProtocolError constructor functions, as they would
+        // result in additional allocations (String -> &str -> String). Because there is no
+        // Default implementation for AIOProtocolError (nor can there be), we will initialize a
+        // "default" instance here, and update fields as necessary.
+        let remote_error_clone = value.clone();
+        let mut aio_error = AIOProtocolError {
+            kind: AIOProtocolErrorKind::UnknownError,
+            message: value.status_message,
+            is_shallow: false, // Always false because a RemoteError implies network activity
+            is_remote: true,   // Always true because it is a RemoteError
+            nested_error: Some(Box::new(remote_error_clone)),
+            header_name: None,
+            header_value: None,
+            timeout_name: None,
+            timeout_value: None,
+            property_name: None,
+            property_value: None,
+            command_name: None, // Will need to update this after return
+            protocol_version: Some(format!("{}", value.protocol_version)),
+            supported_protocol_major_versions: value.supported_protocol_major_versions,
+        };
+
+        match value.status_code {
+            StatusCode::Ok | StatusCode::NoContent => {
+                unreachable!("Invalid status code for RemoteError")
+            }
+            StatusCode::BadRequest => {
+                if value.invalid_property_name.is_some() && value.invalid_property_value.is_some() {
+                    aio_error.kind = AIOProtocolErrorKind::HeaderInvalid;
+                    aio_error.header_name = value.invalid_property_name;
+                    aio_error.header_value = value.invalid_property_value;
+                } else if value.invalid_property_name.is_some() {
+                    aio_error.kind = AIOProtocolErrorKind::HeaderMissing;
+                    aio_error.header_name = value.invalid_property_name;
+                } else {
+                    aio_error.kind = AIOProtocolErrorKind::PayloadInvalid;
+                }
+            }
+            StatusCode::RequestTimeout => {
+                aio_error.kind = AIOProtocolErrorKind::Timeout;
+                aio_error.timeout_name = value.invalid_property_name;
+                aio_error.timeout_value = value.invalid_property_value.and_then(|timeout_s| {
+                    match timeout_s.parse::<iso8601_duration::Duration>() {
+                        Ok(d) => d.to_std(),
+                        Err(_) => None,
+                    }
+                });
+            }
+            StatusCode::UnsupportedMediaType => {
+                aio_error.kind = AIOProtocolErrorKind::HeaderInvalid;
+                aio_error.header_name = value.invalid_property_name;
+                aio_error.header_value = value.invalid_property_value;
+            }
+            StatusCode::InternalServerError => {
+                // TODO: We may want to narrow this logic a bit to cover only valid cases.
+                // but for now, this is the same logic from prior iterations. When revisiting
+                // errors, this may be able to be cleaned up more.
+                if value.is_application_error {
+                    aio_error.kind = AIOProtocolErrorKind::ExecutionException;
+                    aio_error.property_name = value.invalid_property_name;
+                    aio_error.property_value = value.invalid_property_value.map(Value::String);
+                } else if value.invalid_property_name.is_some() {
+                    aio_error.kind = AIOProtocolErrorKind::InternalLogicError;
+                    aio_error.property_name = value.invalid_property_name;
+                    aio_error.property_value = value.invalid_property_value.map(Value::String);
+                } else {
+                    aio_error.kind = AIOProtocolErrorKind::UnknownError;
+                    aio_error.property_name = value.invalid_property_name;
+                    // It is expected that value.invalid_property_value is None, but it is not set
+                    // in order to ensure a None value. This behavior comes from prior iterations
+                    // of code - unsure if this is truly desirable.
+                }
+            }
+            StatusCode::ServiceUnavailable => {
+                aio_error.kind = AIOProtocolErrorKind::StateInvalid;
+                aio_error.header_name = value.invalid_property_name;
+                aio_error.header_value = value.invalid_property_value;
+            }
+            StatusCode::VersionNotSupported => {
+                aio_error.kind = AIOProtocolErrorKind::UnsupportedVersion;
+            }
+        }
+        aio_error
+    }
+}
+
+/// Internal enum representing a result returned over the network
+enum CommandResult<TResp>
+where
+    TResp: PayloadSerialize,
+{
+    /// Indicates a successful response reported over the network
+    Ok(Response<TResp>),
+    /// Indicates an application-level failure reported over the network
+    Err(RemoteError),
+}
+
+impl<TResp> TryFrom<Publish> for CommandResult<TResp>
+where
+    TResp: PayloadSerialize,
+{
+    // NOTE: The `command_name` field will need to be added to the AIOProtocolError AFTER it is
+    // returned in the case of failure, since, of course, the command name is not included in the
+    // Publish.
+    // NOTE 2: This of course would make moving to other error models more complex, but the
+    // eventual implementation of a ChunkBuffer could get us around this by including the command
+    // name on the buffer.
+    type Error = AIOProtocolError;
+
+    fn try_from(value: Publish) -> Result<CommandResult<TResp>, Self::Error> {
+        // NOTE: User properties are parsed out into a new HashMap because:
+        // 1) It makes the code more readable/maintanable to do HashMap lookups
+        // 2) When this logic is extracted to a ChunkBuffer, it will be more memory efficient as
+        //  we won't want to keep entire copies of all Publishes, so we will just copy the
+        //  properties once.
+
+        let publish_properties =
+            value
+                .properties
+                .ok_or(AIOProtocolError::new_header_missing_error(
+                    "Properties",
+                    false,
+                    Some("Properties missing from MQTT message".to_string()),
+                    None,
+                ))?;
+
+        // Parse user properties
+        let expected_aio_properties = [
+            UserProperty::Timestamp,
+            UserProperty::Status,
+            UserProperty::StatusMessage,
+            UserProperty::IsApplicationError,
+            UserProperty::InvalidPropertyName,
+            UserProperty::InvalidPropertyValue,
+            UserProperty::ProtocolVersion,
+            UserProperty::SupportedMajorVersions,
+            UserProperty::RequestProtocolVersion,
+        ];
+        let mut response_custom_user_data = vec![];
+        let mut response_aio_data = HashMap::new();
+        for (key, value) in publish_properties.user_properties {
+            match UserProperty::from_str(&key) {
+                Ok(p) if expected_aio_properties.contains(&p) => {
+                    response_aio_data.insert(p, value);
+                }
+                Ok(_) => {
+                    log::warn!(
+                        "Response should not contain MQTT user property '{key}'. Value is '{value}'"
+                    );
+                    response_custom_user_data.push((key, value));
+                }
+                Err(()) => {
+                    response_custom_user_data.push((key, value));
+                }
+            }
+        }
+
+        // Check the protocol version.
+        // If the protocol version is not supported, or cannot be parsed, all bets are off
+        // regarding what anything else even means, so this *must* be done first
+        let protocol_version = {
+            match response_aio_data.get(&UserProperty::ProtocolVersion) {
+                Some(protocol_version) => {
+                    if let Some(version) = ProtocolVersion::parse_protocol_version(protocol_version)
+                    {
+                        version
+                    } else {
+                        return Err(AIOProtocolError::new_unsupported_version_error(
+                            Some(format!(
+                                "Received a response with an unparsable protocol version number: {protocol_version}"
+                            )),
+                            protocol_version.to_string(),
+                            SUPPORTED_PROTOCOL_VERSIONS.to_vec(),
+                            None,
+                            false,
+                            false,
+                        ));
+                    }
+                }
+                None => DEFAULT_RPC_COMMAND_PROTOCOL_VERSION,
+            }
+        };
+        if !protocol_version.is_supported(SUPPORTED_PROTOCOL_VERSIONS) {
+            return Err(AIOProtocolError::new_unsupported_version_error(
+                None,
+                protocol_version.to_string(),
+                SUPPORTED_PROTOCOL_VERSIONS.to_vec(),
+                None,
+                false,
+                false,
+            ));
+        }
+
+        // Check the status code.
+        // We will use this to determine which data format to serialize to.
+        let status_code = {
+            match response_aio_data.get(&UserProperty::Status) {
+                Some(s) => match StatusCode::from_str(s) {
+                    Ok(code) => code,
+                    Err(StatusCodeParseError::InvalidStatusCode(s)) => {
+                        return Err(AIOProtocolError::new_header_invalid_error(
+                            UserProperty::Status.to_string().as_str(),
+                            &s,
+                            false,
+                            Some(format!(
+                                "Could not parse status in response '{s}' as an integer"
+                            )),
+                            None,
+                        ));
+                    }
+                    Err(StatusCodeParseError::UnknownStatusCode(_)) => {
+                        let status_message = response_aio_data
+                            .remove(&UserProperty::StatusMessage)
+                            .unwrap_or(String::from("Unknown"));
+                        return Err(AIOProtocolError::new_unknown_error(
+                            true,
+                            false,
+                            None,
+                            Some(status_message),
+                            None,
+                        ));
+                    }
+                },
+                None => {
+                    return Err(AIOProtocolError::new_header_missing_error(
+                        "__stat",
+                        false,
+                        Some(format!(
+                            "Response missing MQTT user property '{}'",
+                            UserProperty::Status
+                        )),
+                        None,
+                    ));
+                }
+            }
+        };
+
+        // Get HLC here since we will need it no matter what type of result we are processing
+        let timestamp = response_aio_data
+            .get(&UserProperty::Timestamp)
+            .map(|s| HybridLogicalClock::from_str(s))
+            .transpose()?;
+
+        // Process result based on status code
+        let command_result = match status_code {
+            // Response with payload
+            StatusCode::Ok | StatusCode::NoContent => {
+                let content_type = publish_properties.content_type;
+                let format_indicator = publish_properties.payload_format_indicator.try_into().unwrap_or_else(|e| {
+                    log::error!("Received invalid payload format indicator: {e}. This should not be possible to receive from the broker. Using default.");
+                    FormatIndicator::default()
+                });
+
+                if matches!(status_code, StatusCode::NoContent) && !value.payload.is_empty() {
+                    return Err(AIOProtocolError::new_payload_invalid_error(
+                        false,
+                        false,
+                        None,
+                        Some("Status code 204 (No Content) should not have a payload".to_string()),
+                        None,
+                    ));
+                }
+
+                let payload = match TResp::deserialize(
+                    &value.payload,
+                    content_type.as_ref(),
+                    &format_indicator,
+                ) {
+                    Ok(payload) => payload,
+                    Err(DeserializationError::InvalidPayload(e)) => {
+                        return Err(AIOProtocolError::new_payload_invalid_error(
+                            false,
+                            false,
+                            Some(e.into()),
+                            None,
+                            None,
+                        ));
+                    }
+                    Err(DeserializationError::UnsupportedContentType(message)) => {
+                        return Err(AIOProtocolError::new_header_invalid_error(
+                            "Content Type",
+                            &content_type.unwrap_or("None".to_string()),
+                            false,
+                            Some(message),
+                            None,
+                        ));
+                    }
+                };
+
+                Self::Ok(Response {
+                    payload,
+                    content_type,
+                    format_indicator,
+                    custom_user_data: response_custom_user_data,
+                    timestamp,
+                })
+            }
+            // RemoteError
+            _ => Self::Err(RemoteError {
+                status_code,
+                protocol_version,
+                status_message: response_aio_data.remove(&UserProperty::StatusMessage),
+                is_application_error: response_aio_data
+                    .get(&UserProperty::IsApplicationError)
+                    .is_some_and(|v| v == "true"),
+                invalid_property_name: response_aio_data.remove(&UserProperty::InvalidPropertyName),
+                invalid_property_value: response_aio_data
+                    .remove(&UserProperty::InvalidPropertyValue),
+                timestamp,
+                supported_protocol_major_versions: response_aio_data
+                    .get(&UserProperty::SupportedMajorVersions)
+                    .map(|s| parse_supported_protocol_major_versions(s)),
+            }),
+        };
+        Ok(command_result)
+    }
+}
+
 /// Command Invoker Options struct
 #[derive(Builder, Clone)]
 #[builder(setter(into))]
@@ -874,348 +1216,6 @@ where
         // If we successfully unsubscribed or did not need to, we can consider the invoker successfully shutdown
         *invoker_state_mutex_guard = State::ShutdownSuccessful;
         Ok(())
-    }
-}
-
-/// Represents an error reported by a remote executor
-#[derive(thiserror::Error, Debug, Clone)]
-#[error("Remote Error status code: {status_code:?}")]
-pub struct RemoteError {
-    /// Status code received from a remote service that caused the error
-    status_code: StatusCode,
-    /// Protocol version of data received from a remote service
-    protocol_version: ProtocolVersion,
-    /// The message received with the error
-    status_message: Option<String>,
-    /// Indicates if the error was detected in the user-application
-    is_application_error: bool,
-    /// The name of the property that was invalid
-    invalid_property_name: Option<String>,
-    /// The value of the property that was invalid
-    invalid_property_value: Option<String>,
-    /// List of supported major protocol versions
-    supported_protocol_major_versions: Option<Vec<u16>>,
-    /// The timestamp of the error
-    timestamp: Option<HybridLogicalClock>,
-}
-
-impl From<RemoteError> for AIOProtocolError {
-    fn from(value: RemoteError) -> Self {
-        // NOTE: We do not use the AIOProtocolError constructor functions, as they would
-        // result in additional allocations (String -> &str -> String). Because there is no
-        // Default implementation for AIOProtocolError (nor can there be), we will initialize a
-        // "default" instance here, and update fields as necessary.
-        let remote_error_clone = value.clone();
-        let mut aio_error = AIOProtocolError {
-            kind: AIOProtocolErrorKind::UnknownError,
-            message: value.status_message,
-            is_shallow: false, // Always false because a RemoteError implies network activity
-            is_remote: true,   // Always true because it is a RemoteError
-            nested_error: Some(Box::new(remote_error_clone)),
-            header_name: None,
-            header_value: None,
-            timeout_name: None,
-            timeout_value: None,
-            property_name: None,
-            property_value: None,
-            command_name: None, // Will need to update this after return
-            protocol_version: Some(format!("{}", value.protocol_version)),
-            supported_protocol_major_versions: value.supported_protocol_major_versions,
-        };
-
-        match value.status_code {
-            StatusCode::Ok | StatusCode::NoContent => {
-                unreachable!("Invalid status code for RemoteError")
-            }
-            StatusCode::BadRequest => {
-                if value.invalid_property_name.is_some() && value.invalid_property_value.is_some() {
-                    aio_error.kind = AIOProtocolErrorKind::HeaderInvalid;
-                    aio_error.header_name = value.invalid_property_name;
-                    aio_error.header_value = value.invalid_property_value;
-                } else if value.invalid_property_name.is_some() {
-                    aio_error.kind = AIOProtocolErrorKind::HeaderMissing;
-                    aio_error.header_name = value.invalid_property_name;
-                } else {
-                    aio_error.kind = AIOProtocolErrorKind::PayloadInvalid;
-                }
-            }
-            StatusCode::RequestTimeout => {
-                aio_error.kind = AIOProtocolErrorKind::Timeout;
-                aio_error.timeout_name = value.invalid_property_name;
-                aio_error.timeout_value = value.invalid_property_value.and_then(|timeout_s| {
-                    match timeout_s.parse::<iso8601_duration::Duration>() {
-                        Ok(d) => d.to_std(),
-                        Err(_) => None,
-                    }
-                });
-            }
-            StatusCode::UnsupportedMediaType => {
-                aio_error.kind = AIOProtocolErrorKind::HeaderInvalid;
-                aio_error.header_name = value.invalid_property_name;
-                aio_error.header_value = value.invalid_property_value;
-            }
-            StatusCode::InternalServerError => {
-                // TODO: We may want to narrow this logic a bit to cover only valid cases.
-                // but for now, this is the same logic from prior iterations. When revisiting
-                // errors, this may be able to be cleaned up more.
-                if value.is_application_error {
-                    aio_error.kind = AIOProtocolErrorKind::ExecutionException;
-                    aio_error.property_name = value.invalid_property_name;
-                    aio_error.property_value = value.invalid_property_value.map(Value::String);
-                } else if value.invalid_property_name.is_some() {
-                    aio_error.kind = AIOProtocolErrorKind::InternalLogicError;
-                    aio_error.property_name = value.invalid_property_name;
-                    aio_error.property_value = value.invalid_property_value.map(Value::String);
-                } else {
-                    aio_error.kind = AIOProtocolErrorKind::UnknownError;
-                    aio_error.property_name = value.invalid_property_name;
-                    // It is expected that value.invalid_property_value is None, but it is not set
-                    // in order to ensure a None value. This behavior comes from prior iterations
-                    // of code - unsure if this is truly desirable.
-                }
-            }
-            StatusCode::ServiceUnavailable => {
-                aio_error.kind = AIOProtocolErrorKind::StateInvalid;
-                aio_error.header_name = value.invalid_property_name;
-                aio_error.header_value = value.invalid_property_value;
-            }
-            StatusCode::VersionNotSupported => {
-                aio_error.kind = AIOProtocolErrorKind::UnsupportedVersion;
-            }
-        }
-        aio_error
-    }
-}
-
-/// Internal enum representing a result returned over the network
-enum CommandResult<TResp>
-where
-    TResp: PayloadSerialize,
-{
-    /// Indicates a successful response reported over the network
-    Ok(Response<TResp>),
-    /// Indicates an application-level failure reported over the network
-    Err(RemoteError),
-}
-
-impl<TResp> TryFrom<Publish> for CommandResult<TResp>
-where
-    TResp: PayloadSerialize,
-{
-    // NOTE: The `command_name` field will need to be added to the AIOProtocolError AFTER it is
-    // returned in the case of failure, since, of course, the command name is not included in the
-    // Publish.
-    // NOTE 2: This of course would make moving to other error models more complex, but the
-    // eventual implementation of a ChunkBuffer could get us around this by including the command
-    // name on the buffer.
-    type Error = AIOProtocolError;
-
-    fn try_from(value: Publish) -> Result<CommandResult<TResp>, Self::Error> {
-        // NOTE: User properties are parsed out into a new HashMap because:
-        // 1) It makes the code more readable/maintanable to do HashMap lookups
-        // 2) When this logic is extracted to a ChunkBuffer, it will be more memory efficient as
-        //  we won't want to keep entire copies of all Publishes, so we will just copy the
-        //  properties once.
-
-        let publish_properties =
-            value
-                .properties
-                .ok_or(AIOProtocolError::new_header_missing_error(
-                    "Properties",
-                    false,
-                    Some("Properties missing from MQTT message".to_string()),
-                    None,
-                ))?;
-
-        // Parse user properties
-        let expected_aio_properties = [
-            UserProperty::Timestamp,
-            UserProperty::Status,
-            UserProperty::StatusMessage,
-            UserProperty::IsApplicationError,
-            UserProperty::InvalidPropertyName,
-            UserProperty::InvalidPropertyValue,
-            UserProperty::ProtocolVersion,
-            UserProperty::SupportedMajorVersions,
-            UserProperty::RequestProtocolVersion,
-        ];
-        let mut response_custom_user_data = vec![];
-        let mut response_aio_data = HashMap::new();
-        for (key, value) in publish_properties.user_properties {
-            match UserProperty::from_str(&key) {
-                Ok(p) if expected_aio_properties.contains(&p) => {
-                    response_aio_data.insert(p, value);
-                }
-                Ok(_) => {
-                    log::warn!(
-                        "Response should not contain MQTT user property '{key}'. Value is '{value}'"
-                    );
-                    response_custom_user_data.push((key, value));
-                }
-                Err(()) => {
-                    response_custom_user_data.push((key, value));
-                }
-            }
-        }
-
-        // Check the protocol version.
-        // If the protocol version is not supported, or cannot be parsed, all bets are off
-        // regarding what anything else even means, so this *must* be done first
-        let protocol_version = {
-            match response_aio_data.get(&UserProperty::ProtocolVersion) {
-                Some(protocol_version) => {
-                    if let Some(version) = ProtocolVersion::parse_protocol_version(protocol_version)
-                    {
-                        version
-                    } else {
-                        return Err(AIOProtocolError::new_unsupported_version_error(
-                            Some(format!(
-                                "Received a response with an unparsable protocol version number: {protocol_version}"
-                            )),
-                            protocol_version.to_string(),
-                            SUPPORTED_PROTOCOL_VERSIONS.to_vec(),
-                            None,
-                            false,
-                            false,
-                        ));
-                    }
-                }
-                None => DEFAULT_RPC_COMMAND_PROTOCOL_VERSION,
-            }
-        };
-        if !protocol_version.is_supported(SUPPORTED_PROTOCOL_VERSIONS) {
-            return Err(AIOProtocolError::new_unsupported_version_error(
-                None,
-                protocol_version.to_string(),
-                SUPPORTED_PROTOCOL_VERSIONS.to_vec(),
-                None,
-                false,
-                false,
-            ));
-        }
-
-        // Check the status code.
-        // We will use this to determine which data format to serialize to.
-        let status_code = {
-            match response_aio_data.get(&UserProperty::Status) {
-                Some(s) => match StatusCode::from_str(s) {
-                    Ok(code) => code,
-                    Err(StatusCodeParseError::InvalidStatusCode(s)) => {
-                        return Err(AIOProtocolError::new_header_invalid_error(
-                            UserProperty::Status.to_string().as_str(),
-                            &s,
-                            false,
-                            Some(format!(
-                                "Could not parse status in response '{s}' as an integer"
-                            )),
-                            None,
-                        ));
-                    }
-                    Err(StatusCodeParseError::UnknownStatusCode(_)) => {
-                        let status_message = response_aio_data
-                            .remove(&UserProperty::StatusMessage)
-                            .unwrap_or(String::from("Unknown"));
-                        return Err(AIOProtocolError::new_unknown_error(
-                            true,
-                            false,
-                            None,
-                            Some(status_message),
-                            None,
-                        ));
-                    }
-                },
-                None => {
-                    return Err(AIOProtocolError::new_header_missing_error(
-                        "__stat",
-                        false,
-                        Some(format!(
-                            "Response missing MQTT user property '{}'",
-                            UserProperty::Status
-                        )),
-                        None,
-                    ));
-                }
-            }
-        };
-
-        // Get HLC here since we will need it no matter what type of result we are processing
-        let timestamp = response_aio_data
-            .get(&UserProperty::Timestamp)
-            .map(|s| HybridLogicalClock::from_str(s))
-            .transpose()?;
-
-        // Process result based on status code
-        let command_result = match status_code {
-            // Response with payload
-            StatusCode::Ok | StatusCode::NoContent => {
-                let content_type = publish_properties.content_type;
-                let format_indicator = publish_properties.payload_format_indicator.try_into().unwrap_or_else(|e| {
-                    log::error!("Received invalid payload format indicator: {e}. This should not be possible to receive from the broker. Using default.");
-                    FormatIndicator::default()
-                });
-
-                if matches!(status_code, StatusCode::NoContent) && !value.payload.is_empty() {
-                    return Err(AIOProtocolError::new_payload_invalid_error(
-                        false,
-                        false,
-                        None,
-                        Some("Status code 204 (No Content) should not have a payload".to_string()),
-                        None,
-                    ));
-                }
-
-                let payload = match TResp::deserialize(
-                    &value.payload,
-                    content_type.as_ref(),
-                    &format_indicator,
-                ) {
-                    Ok(payload) => payload,
-                    Err(DeserializationError::InvalidPayload(e)) => {
-                        return Err(AIOProtocolError::new_payload_invalid_error(
-                            false,
-                            false,
-                            Some(e.into()),
-                            None,
-                            None,
-                        ));
-                    }
-                    Err(DeserializationError::UnsupportedContentType(message)) => {
-                        return Err(AIOProtocolError::new_header_invalid_error(
-                            "Content Type",
-                            &content_type.unwrap_or("None".to_string()),
-                            false,
-                            Some(message),
-                            None,
-                        ));
-                    }
-                };
-
-                Self::Ok(Response {
-                    payload,
-                    content_type,
-                    format_indicator,
-                    custom_user_data: response_custom_user_data,
-                    timestamp,
-                })
-            }
-            // RemoteError
-            _ => Self::Err(RemoteError {
-                status_code,
-                protocol_version,
-                status_message: response_aio_data.remove(&UserProperty::StatusMessage),
-                is_application_error: response_aio_data
-                    .get(&UserProperty::IsApplicationError)
-                    .is_some_and(|v| v == "true"),
-                invalid_property_name: response_aio_data.remove(&UserProperty::InvalidPropertyName),
-                invalid_property_value: response_aio_data
-                    .remove(&UserProperty::InvalidPropertyValue),
-                timestamp,
-                supported_protocol_major_versions: response_aio_data
-                    .get(&UserProperty::SupportedMajorVersions)
-                    .map(|s| parse_supported_protocol_major_versions(s)),
-            }),
-        };
-        Ok(command_result)
     }
 }
 
