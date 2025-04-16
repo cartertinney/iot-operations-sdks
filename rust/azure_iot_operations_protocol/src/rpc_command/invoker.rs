@@ -210,7 +210,9 @@ impl From<RemoteError> for AIOProtocolError {
                 unreachable!("Invalid status code for RemoteError")
             }
             StatusCode::BadRequest => {
-                if value.invalid_property_name.is_some() && value.invalid_property_value.is_some() {
+                // TODO: Ideally these conditions would be tighter, revisit in
+                // error rework
+                if value.invalid_property_value.is_some() {
                     aio_error.kind = AIOProtocolErrorKind::HeaderInvalid;
                     aio_error.header_name = value.invalid_property_name;
                     aio_error.header_value = value.invalid_property_value;
