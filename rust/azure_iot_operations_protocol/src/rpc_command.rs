@@ -76,15 +76,15 @@ impl FromStr for StatusCode {
                 }
                 _ => Err(StatusCodeParseError::UnknownStatusCode(status)),
             },
-            Err(_) => Err(StatusCodeParseError::InvalidStatusCode(s.to_string())),
+            Err(_) => Err(StatusCodeParseError::UnparsableStatusCode(s.to_string())),
         }
     }
 }
 
 #[derive(thiserror::Error, Debug)]
 pub(crate) enum StatusCodeParseError {
-    #[error("Invalid status code: {0}")]
-    InvalidStatusCode(String),
+    #[error("Unparsable status code: {0}")]
+    UnparsableStatusCode(String),
     #[error("Unknown status code: {0}")]
     UnknownStatusCode(u16),
 }
@@ -118,11 +118,11 @@ mod tests {
         let code_result = StatusCode::from_str(test_invalid_code);
         match code_result {
             Ok(_) => panic!("Expected error"),
-            Err(StatusCodeParseError::InvalidStatusCode(s)) => {
+            Err(StatusCodeParseError::UnparsableStatusCode(s)) => {
                 assert_eq!(s, test_invalid_code.to_string());
             }
             Err(StatusCodeParseError::UnknownStatusCode(_)) => {
-                panic!("Expected InvalidStatusCode error")
+                panic!("Expected UnparsableStatusCode error")
             }
         }
     }
@@ -136,7 +136,7 @@ mod tests {
             Err(StatusCodeParseError::UnknownStatusCode(s)) => {
                 assert_eq!(s, test_unknown_code);
             }
-            Err(StatusCodeParseError::InvalidStatusCode(_)) => {
+            Err(StatusCodeParseError::UnparsableStatusCode(_)) => {
                 panic!("Expected UnknownStatusCode error")
             }
         }

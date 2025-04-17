@@ -31,10 +31,11 @@ use crate::{
         user_properties::UserProperty,
     },
     parse_supported_protocol_major_versions,
-    rpc_command::{DEFAULT_RPC_COMMAND_PROTOCOL_VERSION, RPC_COMMAND_PROTOCOL_VERSION, StatusCode},
+    rpc_command::{
+        DEFAULT_RPC_COMMAND_PROTOCOL_VERSION, RPC_COMMAND_PROTOCOL_VERSION, StatusCode,
+        StatusCodeParseError,
+    },
 };
-
-use super::StatusCodeParseError;
 
 const SUPPORTED_PROTOCOL_VERSIONS: &[u16] = &[1];
 
@@ -163,7 +164,7 @@ where
 #[derive(thiserror::Error, Debug, Clone)]
 #[error("Remote Error status code: {status_code:?}")]
 pub struct RemoteError {
-    /// Status code received from a remote service that caused the error
+    /// Status code received from a remote service that detected the error
     status_code: StatusCode,
     /// Protocol version of data received from a remote service
     protocol_version: ProtocolVersion,
@@ -201,18 +202,18 @@ impl From<RemoteError> for AIOProtocolError {
             property_name: None,
             property_value: None,
             command_name: None, // Will need to update this after return
-            protocol_version: Some(format!("{}", value.protocol_version)),
+            protocol_version: Some(value.protocol_version.to_string()),
             supported_protocol_major_versions: value.supported_protocol_major_versions,
         };
 
         match value.status_code {
             StatusCode::Ok | StatusCode::NoContent => {
+                // NOTE: Could remove this by defining a subset of the StatusCode enums
+                // e.g. FailureStatusCode, but that might be overkill
                 unreachable!("Invalid status code for RemoteError")
             }
             StatusCode::BadRequest => {
-                // TODO: Ideally these conditions would be tighter, revisit in
-                // error rework
-                if value.invalid_property_value.is_some() {
+                if value.invalid_property_name.is_some() && value.invalid_property_value.is_some() {
                     aio_error.kind = AIOProtocolErrorKind::HeaderInvalid;
                     aio_error.header_name = value.invalid_property_name;
                     aio_error.header_value = value.invalid_property_value;
@@ -252,16 +253,16 @@ impl From<RemoteError> for AIOProtocolError {
                     aio_error.property_value = value.invalid_property_value.map(Value::String);
                 } else {
                     aio_error.kind = AIOProtocolErrorKind::UnknownError;
-                    aio_error.property_name = value.invalid_property_name;
-                    // It is expected that value.invalid_property_value is None, but it is not set
-                    // in order to ensure a None value. This behavior comes from prior iterations
-                    // of code - unsure if this is truly desirable.
+                    // It is expected that value.invalid_property_name and
+                    // value.invalid_property_value are None, but they are not set
+                    // in order to ensure a None value.
+                    // Not sure that this is entirely desirable.
                 }
             }
             StatusCode::ServiceUnavailable => {
                 aio_error.kind = AIOProtocolErrorKind::StateInvalid;
-                aio_error.header_name = value.invalid_property_name;
-                aio_error.header_value = value.invalid_property_value;
+                aio_error.property_name = value.invalid_property_name;
+                aio_error.property_value = value.invalid_property_value.map(Value::String);
             }
             StatusCode::VersionNotSupported => {
                 aio_error.kind = AIOProtocolErrorKind::UnsupportedVersion;
@@ -278,7 +279,7 @@ where
 {
     /// Indicates a successful response reported over the network
     Ok(Response<TResp>),
-    /// Indicates an application-level failure reported over the network
+    /// Indicates a protocol failure reported over the network
     Err(RemoteError),
 }
 
@@ -384,9 +385,9 @@ where
             match response_aio_data.get(&UserProperty::Status) {
                 Some(s) => match StatusCode::from_str(s) {
                     Ok(code) => code,
-                    Err(StatusCodeParseError::InvalidStatusCode(s)) => {
+                    Err(StatusCodeParseError::UnparsableStatusCode(s)) => {
                         return Err(AIOProtocolError::new_header_invalid_error(
-                            UserProperty::Status.to_string().as_str(),
+                            &UserProperty::Status.to_string(),
                             &s,
                             false,
                             Some(format!(
@@ -417,7 +418,7 @@ where
                 },
                 None => {
                     return Err(AIOProtocolError::new_header_missing_error(
-                        "__stat",
+                        &UserProperty::Status.to_string(),
                         false,
                         Some(format!(
                             "Response missing MQTT user property '{}'",
