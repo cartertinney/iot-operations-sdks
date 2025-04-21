@@ -992,6 +992,7 @@ where
                         _ => {
                             // NOTE: This is the success case for cached lookup
                             // The process_command subroutine handles both cached response and user responses
+                            // This is ALSO the case for failure, since CacheEntryStatus::NotFound matches here
                             tokio::task::spawn({
                                 let app_hlc_clone = self.application_hlc.clone();
                                 let client_clone = self.mqtt_client.clone();
