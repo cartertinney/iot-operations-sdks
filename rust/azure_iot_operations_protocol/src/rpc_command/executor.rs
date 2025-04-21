@@ -594,6 +594,7 @@ where
                     log::info!("[{}][pkid: {}] Received request", self.command_name, m.pkid);
                     let message_received_time = Instant::now();
 
+                    // TODO: Is this necessary? Why?
                     // Clone properties
                     let properties = if let Some(properties) = &m.properties {
                         properties.clone()
@@ -683,6 +684,8 @@ where
                         ))),
                     };
 
+
+                    // NOTE: This handles overflow
                     // Check if there was an error calculating the command expiration time
                     // if not, set the command expiration time
                     if let Some(command_expiration_time) = command_expiration_time {
@@ -749,7 +752,8 @@ where
                         // Check cache
                         response_arguments.cached_entry_status = self.cache.get(cache_key);
 
-                        // If the cache entry is not found, continue processing the request
+                        // If the cache entry is found, break out
+                        // If it is not found, continue processing
                         if response_arguments.cached_entry_status != CacheEntryStatus::NotFound {
                             break 'process_request;
                         }
@@ -927,6 +931,9 @@ where
 
                         // Check the command has not expired, if it has, we do not respond to the invoker.
                         if command_expiration_time.elapsed().is_zero() {
+
+                            // NOTE: This is the success block
+
                             // Elapsed returns zero if the time has not passed
                             tokio::task::spawn({
                                 let app_hlc_clone = self.application_hlc.clone();
@@ -958,18 +965,24 @@ where
                         }
                     }
 
+                    // NOTE: Outside of 'process_request block either indicates
+                    // failure OR cache process
+
+
                     // Checking that command expiration time was calculated and has not
                     // expired. If it has, we do not respond to the invoker.
                     if let Some(command_expiration_time) = command_expiration_time {
                         if !command_expiration_time.elapsed().is_zero() {
+                            // TODO: need to handle ack here
                             continue;
                         }
                     }
 
-                    // If the command has expired, we do not respond to the invoker.
+                    // If the CACHED command has expired, we do not respond to the invoker.
                     match response_arguments.cached_entry_status {
                         CacheEntryStatus::Expired => {
                             log::debug!(
+                                // NOTE: This actually should be the CACHED response to the duplicate request has expired
                                 "[{}][pkid: {}] Duplicate request has expired",
                                 self.command_name,
                                 m.pkid
@@ -977,6 +990,8 @@ where
                             continue;
                         }
                         _ => {
+                            // NOTE: This is the success case for cached lookup
+                            // The process_command subroutine handles both cached response and user responses
                             tokio::task::spawn({
                                 let app_hlc_clone = self.application_hlc.clone();
                                 let client_clone = self.mqtt_client.clone();
@@ -1005,6 +1020,8 @@ where
                         }
                     }
 
+                    // NOTE: This is exclusively for the overflow case with expiration time (i.e. the expiration time couldn't be calculated)
+                    // This was added as an implementation detail, it's not part of the spec
                     if !command_expiration_time_calculated {
                         return Some(Err(AIOProtocolError::new_internal_logic_error(
                             true,
